@@ -19,11 +19,25 @@ python -m pip install -r requirements.txt
 python -m unittest discover -s tests -v
 ```
 
-The CI workflow runs the test suite under Coverage.py and uploads `coverage-xml` and `code-coverage-report` artifacts (14-day retention). Download `code-coverage-report` from a workflow run, extract it, and open `index.html` to inspect covered and missing lines. The CI badge above reflects the default branch, not the unmerged pull request.
+The CI workflow runs the test suite under Coverage.py and uploads `coverage-xml` and `code-coverage-report` artifacts (14-day retention). Download `code-coverage-report` from a workflow run, extract it, and open `index.html` to inspect covered and missing lines. The CI badge above reflects the default branch; it does not verify live bot deployment.
 
 Codecov upload and its percentage badge are **not yet configured**. The local XML artifact does not automatically publish results to Codecov.
 
 The agent verifies the bot identity via Telegram getMe before searching. It discovers public scans through Open Library, checks Internet Archive licensing metadata, validates document bytes, hashes downloads for deduplication and sends authorized documents. Missing or unsupported licenses are rejected.
+
+## Architecture and release readiness
+
+The current scheduled entry point is `agent.py` at the repository root. Supporting modules also remain at the root until their imports and execution paths can be migrated safely. Tests are under `tests/`. See [CONTRIBUTING.md](CONTRIBUTING.md) for development instructions.
+
+The interactive router, delivery gateways and encrypted local restore utilities require live integration testing before production use. A manual, admin-restricted encrypted Telegram vault backup is implemented but not live-tested; automatic recovery is not implemented. Google/Gemini search is implemented as a fail-closed adapter but is not live-tested or deployed. The optional runner backup hook is disabled by default and is not a persistent-host backup solution.
+
+## Manual encrypted backup
+
+The optional live polling runner (`python main.py`) supports `/backup` in a private chat, restricted to the Telegram **user ID** configured in `ADMIN_CHAT_ID`. Set `TELEGRAM_BACKUP_CHANNEL_ID` to a private channel where the bot has permission to post documents and pin messages. Generate a Fernet key and set `BACKUP_ENCRYPTION_KEY`; retain it securely outside the bot or recovery will be impossible. `BOT_DB_PATH` selects the running bot's SQLite database. The command creates a consistent SQLite snapshot, encrypts it, uploads it, then requests pinning. It never sends the unencrypted database to Telegram. Backup is **not** automatic restore and is not verified live.
+
+## Admin diagnostics
+
+Send `/status` in a private chat with the polling bot as the user identified by `ADMIN_CHAT_ID`. The command reports process uptime, SQLite database presence and size, read-only integrity status, total stored sessions and sessions updated in the last 24 hours. It does not expose user identifiers, does not create a missing database, and does not prove that scheduled GitHub Actions or external search providers are healthy.
 
 ## Limitations
 
