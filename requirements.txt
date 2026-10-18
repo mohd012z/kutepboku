@@ -1,2 +1,3 @@
 requests>=2.31,<3
 cryptography>=42,<47
+coverage>=7,<8
