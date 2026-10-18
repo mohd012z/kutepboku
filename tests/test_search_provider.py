@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from search_provider import archive_rights_checker
 
@@ -21,6 +21,7 @@ class RightsTests(unittest.TestCase):
         response.headers = {}
         session = Mock()
         session.get.return_value = response
-        self.assertFalse(archive_rights_checker(
-            "https://archive.org/download/bookid/book.pdf", {}, session=session
-        ))
+        with patch("agent.safe_url", return_value=True):
+            self.assertFalse(archive_rights_checker(
+                "https://archive.org/download/bookid/book.pdf", {}, session=session
+            ))
