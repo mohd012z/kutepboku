@@ -12,6 +12,22 @@ import tempfile
 from cryptography.fernet import Fernet
 
 
+def verify_database_integrity(db_path):
+    """Validate an existing SQLite file without creating or modifying it."""
+    path = Path(db_path)
+    if not path.is_file():
+        return False
+    try:
+        with sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True, timeout=5) as db:
+            if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                return False
+            return db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='user_sessions'"
+            ).fetchone() is not None
+    except (sqlite3.Error, OSError, ValueError):
+        return False
+
+
 def restore_snapshot(encrypted_path, target_path, key):
     source = Path(encrypted_path)
     target = Path(target_path)
@@ -25,11 +41,8 @@ def restore_snapshot(encrypted_path, target_path, key):
     with tempfile.TemporaryDirectory(dir=str(target.parent.resolve())) as directory:
         temporary = Path(directory) / "snapshot.db"
         temporary.write_bytes(cipher.decrypt(source.read_bytes()))
-        with sqlite3.connect(temporary.resolve().as_uri() + "?mode=ro", uri=True) as db:
-            if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
-                raise ValueError("SQLite integrity check failed")
-            if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='user_sessions'").fetchone():
-                raise ValueError("Required user_sessions table missing")
+        if not verify_database_integrity(temporary):
+            raise ValueError("SQLite integrity or required table validation failed")
         os.replace(temporary, target)
     return target
 
