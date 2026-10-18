@@ -32,6 +32,10 @@ jobs:
           else
             echo 'Coverage data not generated.'
           fi
+      - name: Assert coverage reports exist
+        run: |
+          test -s coverage.xml
+          test -s htmlcov/index.html
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
         with:
