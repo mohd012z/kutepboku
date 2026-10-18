@@ -81,7 +81,7 @@ def download(session, url):
             raise ValueError("Document too small")
         if data.startswith(b"%PDF-"):
             return "pdf", data
-        if data.startswith(b"PK\\x03\\x04") and b"mimetypeapplication/epub+zip" in data[:200]:
+        if data.startswith(b"PK\x03\x04") and b"mimetypeapplication/epub+zip" in data[:200]:
             return "epub", data
         raise ValueError("Invalid PDF/EPUB signature")
     finally:
@@ -145,10 +145,10 @@ def run():
                 if digest in delivered:
                     continue
                 send(session, token, chat, "book." + ext, content,
-                     str(book.get("title", "Open eBook")) + "\\n" + url)
+                     str(book.get("title", "Open eBook")) + "\n" + url)
                 delivered.add(digest)
                 state.parent.mkdir(parents=True, exist_ok=True)
-                state.write_text(json.dumps(sorted(delivered), indent=2) + "\\n")
+                state.write_text(json.dumps(sorted(delivered), indent=2) + "\n")
                 print("Delivered:", book.get("title", "Open eBook"))
                 return
     print("No new licensed document found")
