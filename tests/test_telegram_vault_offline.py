@@ -155,6 +155,7 @@ class VaultOfflineTests(unittest.TestCase):
             yield b"partial-data"
             raise requests.exceptions.ChunkedEncodingError("botstaging connection broken")
         stream.iter_content.return_value = chunks()
+        stream.__enter__.return_value = stream
         with patch("telegram_vault.requests.get", side_effect=[metadata, stream]):
             with self.assertRaisesRegex(RuntimeError, "Telegram staging download failed") as raised:
                 self.client.download_file_by_id("file-id", destination, expected_size=100)
@@ -168,6 +169,7 @@ class VaultOfflineTests(unittest.TestCase):
         metadata.json.return_value = {"ok": True, "result": {"file_path": "files/test", "file_size": 4}}
         stream = MagicMock()
         stream.iter_content.return_value = [b"data"]
+        stream.__enter__.return_value = stream
         with patch("telegram_vault.requests.get", side_effect=[metadata, stream]), \
              patch("telegram_vault.os.link", side_effect=OSError("permission denied")):
             with self.assertRaisesRegex(RuntimeError, "Atomic no-overwrite publication failed"):
