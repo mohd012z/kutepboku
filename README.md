@@ -10,7 +10,7 @@ Autonomous open-license eBook scout delivering to Telegram [@mysoupsearchbot](ht
 2. Set GitHub Actions secrets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
 3. Optionally set repository variable `SCOUT_QUERY` (default: `python programming`).
 4. Enable GitHub Actions and allow workflow write permission to persist delivery history.
-5. Run **msasoup daily delivery** manually; daily schedule is 00:00 UTC / 08:00 Malaysia time.
+5. Run **Ebook Scout Agent & Maintenance** manually, optionally entering a custom `search_query`. The scheduled scout runs every four hours at 00:00, 04:00, 08:00, 12:00, 16:00 and 20:00 UTC (08:00, 12:00, 16:00, 20:00, 00:00 and 04:00 Malaysia time). GitHub Actions schedules can be delayed.
 
 ## Tests
 
@@ -29,7 +29,7 @@ The agent verifies the bot identity via Telegram getMe before searching. It disc
 
 The current scheduled entry point is `agent.py` at the repository root. Supporting modules also remain at the root until their imports and execution paths can be migrated safely. Tests are under `tests/`. See [CONTRIBUTING.md](CONTRIBUTING.md) for development instructions.
 
-The interactive router, delivery gateways and encrypted local restore utilities require live integration testing before production use. A manual, admin-restricted encrypted Telegram vault backup is implemented but not live-tested; automatic recovery is not implemented. Google/Gemini search is implemented as a fail-closed adapter but is not live-tested or deployed. The optional runner backup hook is disabled by default and is not a persistent-host backup solution.
+The interactive router, delivery gateways and encrypted local restore utilities require live integration testing before production use. A manual, admin-restricted encrypted Telegram vault backup is implemented but not live-tested; automatic recovery is not implemented. Google/Gemini search is implemented as a fail-closed adapter but is not live-tested or deployed. The scheduled runner does not restore or back up the persistent polling database; backup and recovery must run on the host that owns that database.
 
 ## Manual encrypted backup
 
