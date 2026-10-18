@@ -31,6 +31,7 @@ jobs:
             coverage report --include="telegram_vault.py" -m
             echo "::endgroup::"
             coverage json -o coverage.json
+            python parse_vault_coverage.py coverage.json
             coverage xml -o coverage.xml
             coverage html -d htmlcov
           else
