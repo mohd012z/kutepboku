@@ -1,8 +1,10 @@
 name: msasoup CI
 on:
   pull_request:
-  push:
     branches: [main]
+  push:
+    branches: [main, feat/whatsapp-delivery-gateway]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
