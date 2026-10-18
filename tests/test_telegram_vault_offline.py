@@ -233,5 +233,104 @@ class VaultOfflineTests(unittest.TestCase):
         self.assertFalse(os.path.lexists(destination))
         self.assertEqual(os.listdir(self.temp.name), [])
 
+
+    def test_missing_staging_credentials_rejected(self):
+        with patch.dict(os.environ, {"TELEGRAM_TEST_BOT_TOKEN": "", "TELEGRAM_TEST_CHANNEL_ID": ""}):
+            with self.assertRaisesRegex(ValueError, "Dedicated staging"):
+                TelegramVaultClient()
+
+    def test_missing_upload_file_rejected(self):
+        with self.assertRaises(FileNotFoundError):
+            self.client.upload_snapshot(os.path.join(self.temp.name, "missing.enc"), Fernet.generate_key())
+
+    def test_empty_upload_file_rejected(self):
+        source = os.path.join(self.temp.name, "empty.enc")
+        with open(source, "wb"):
+            pass
+        with self.assertRaisesRegex(ValueError, "size out of bounds"):
+            self.client.upload_snapshot(source, Fernet.generate_key())
+
+    def test_upload_api_rejects_false_ok(self):
+        response = Mock()
+        response.json.return_value = {"ok": False, "description": "sensitive"}
+        with patch("telegram_vault.requests.post", return_value=response):
+            with self.assertRaisesRegex(RuntimeError, "API rejected request"):
+                self.client._api("sendDocument")
+
+    def test_upload_api_rejects_non_dict_payload(self):
+        response = Mock()
+        response.json.return_value = ["unexpected"]
+        with patch("telegram_vault.requests.post", return_value=response):
+            with self.assertRaisesRegex(RuntimeError, "API rejected request"):
+                self.client._api("sendDocument")
+
+    def test_upload_malformed_metadata_type(self):
+        key = Fernet.generate_key()
+        source = os.path.join(self.temp.name, "valid-metadata.enc")
+        with open(source, "wb") as output:
+            output.write(Fernet(key).encrypt(b"test"))
+        with patch.object(self.client, "_api", return_value=None):
+            with self.assertRaisesRegex(RuntimeError, "missing document metadata"):
+                self.client.upload_snapshot(source, key)
+
+    def test_pin_and_delete_false_response(self):
+        with patch.object(self.client, "_api", return_value=False):
+            self.assertFalse(self.client.pin_message(7))
+            self.assertFalse(self.client.delete_message(7))
+
+    def test_metadata_rejected_response(self):
+        response = Mock()
+        response.json.return_value = {"ok": False}
+        with patch("telegram_vault.requests.get", return_value=response):
+            with self.assertRaisesRegex(RuntimeError, "file metadata unavailable"):
+                self.client.download_file_by_id("id", os.path.join(self.temp.name, "out.enc"))
+
+    def test_metadata_malformed_result(self):
+        response = Mock()
+        response.json.return_value = {"ok": True, "result": {}}
+        with patch("telegram_vault.requests.get", return_value=response):
+            with self.assertRaisesRegex(RuntimeError, "Malformed Telegram file metadata"):
+                self.client.download_file_by_id("id", os.path.join(self.temp.name, "out.enc"))
+
+    def test_metadata_path_traversal_rejected(self):
+        response = Mock()
+        response.json.return_value = {"ok": True, "result": {"file_path": "../secret"}}
+        with patch("telegram_vault.requests.get", return_value=response):
+            with self.assertRaisesRegex(ValueError, "Invalid Telegram file path"):
+                self.client.download_file_by_id("id", os.path.join(self.temp.name, "out.enc"))
+
+    def test_expected_size_out_of_bounds(self):
+        with self.assertRaisesRegex(ValueError, "Expected size out of bounds"):
+            self.client.download_file_by_id("id", os.path.join(self.temp.name, "out.enc"), expected_size=0)
+
+    def test_server_size_out_of_bounds(self):
+        response = Mock()
+        response.json.return_value = {"ok": True, "result": {"file_path": "files/a", "file_size": 0}}
+        with patch("telegram_vault.requests.get", return_value=response):
+            with self.assertRaisesRegex(ValueError, "Telegram file size out of bounds"):
+                self.client.download_file_by_id("id", os.path.join(self.temp.name, "out.enc"))
+
+    def test_empty_download_rejected(self):
+        with self.assertRaisesRegex(ValueError, "Downloaded snapshot size mismatch"):
+            self._download([])
+
+    def test_existing_destination_created_during_publication(self):
+        destination = os.path.join(self.temp.name, "download.enc")
+        metadata = Mock()
+        metadata.json.return_value = {"ok": True, "result": {"file_path": "files/test"}}
+        stream = MagicMock()
+        stream.__enter__.return_value = stream
+        stream.iter_content.return_value = [b"data"]
+        def competing_writer(source, target):
+            with open(target, "wb") as output:
+                output.write(b"other")
+            raise FileExistsError("already created")
+        with patch("telegram_vault.requests.get", side_effect=[metadata, stream]), \
+             patch("telegram_vault.os.link", side_effect=competing_writer):
+            with self.assertRaisesRegex(FileExistsError, "Download destination exists"):
+                self.client.download_file_by_id("id", destination)
+        with open(destination, "rb") as stream:
+            self.assertEqual(stream.read(), b"other")
+
 if __name__ == "__main__":
     unittest.main()
