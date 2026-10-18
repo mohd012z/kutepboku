@@ -124,5 +124,66 @@ class VaultOfflineTests(unittest.TestCase):
             self.assertEqual(output.read(), b"data")
 
 
+    def test_upload_malformed_json_is_sanitized(self):
+        key = Fernet.generate_key()
+        source = os.path.join(self.temp.name, "valid.enc")
+        with open(source, "wb") as output:
+            output.write(Fernet(key).encrypt(b"test payload"))
+        response = Mock()
+        response.json.side_effect = ValueError("secret staging token: botstaging")
+        with patch("telegram_vault.requests.post", return_value=response):
+            with self.assertRaisesRegex(RuntimeError, "Telegram staging API request failed") as raised:
+                self.client.upload_snapshot(source, key)
+        self.assertNotIn("botstaging", str(raised.exception))
+
+    def test_upload_malformed_result_is_sanitized(self):
+        key = Fernet.generate_key()
+        source = os.path.join(self.temp.name, "valid.enc")
+        with open(source, "wb") as output:
+            output.write(Fernet(key).encrypt(b"test payload"))
+        with patch.object(self.client, "_api", return_value={"message_id": 1, "document": {}}):
+            with self.assertRaisesRegex(RuntimeError, "missing document metadata"):
+                self.client.upload_snapshot(source, key)
+
+    def test_partial_stream_interruption_removes_temp(self):
+        import requests
+        destination = os.path.join(self.temp.name, "partial.enc")
+        metadata = Mock()
+        metadata.json.return_value = {"ok": True, "result": {"file_path": "documents/snapshot.enc", "file_size": 100}}
+        stream = MagicMock()
+        def chunks():
+            yield b"partial-data"
+            raise requests.exceptions.ChunkedEncodingError("botstaging connection broken")
+        stream.iter_content.return_value = chunks()
+        with patch("telegram_vault.requests.get", side_effect=[metadata, stream]):
+            with self.assertRaisesRegex(RuntimeError, "Telegram staging download failed") as raised:
+                self.client.download_file_by_id("file-id", destination, expected_size=100)
+        self.assertNotIn("botstaging", str(raised.exception))
+        self.assertFalse(os.path.lexists(destination))
+        self.assertEqual(os.listdir(self.temp.name), [])
+
+    def test_atomic_link_failure_preserves_destination(self):
+        destination = os.path.join(self.temp.name, "download.enc")
+        metadata = Mock()
+        metadata.json.return_value = {"ok": True, "result": {"file_path": "files/test", "file_size": 4}}
+        stream = MagicMock()
+        stream.iter_content.return_value = [b"data"]
+        with patch("telegram_vault.requests.get", side_effect=[metadata, stream]), \
+             patch("telegram_vault.os.link", side_effect=OSError("permission denied")):
+            with self.assertRaisesRegex(RuntimeError, "Atomic no-overwrite publication failed"):
+                self.client.download_file_by_id("file-id", destination)
+        self.assertFalse(os.path.lexists(destination))
+        self.assertEqual(os.listdir(self.temp.name), [])
+
+    def test_download_metadata_invalid_json_is_sanitized(self):
+        metadata = Mock()
+        metadata.json.side_effect = ValueError("botstaging secret in response")
+        with patch("telegram_vault.requests.get", return_value=metadata):
+            with self.assertRaisesRegex(RuntimeError, "Telegram file metadata request failed") as raised:
+                self.client.download_file_by_id("file-id", os.path.join(self.temp.name, "download.enc"))
+        self.assertNotIn("botstaging", str(raised.exception))
+        self.assertEqual(os.listdir(self.temp.name), [])
+
+
 if __name__ == "__main__":
     unittest.main()
