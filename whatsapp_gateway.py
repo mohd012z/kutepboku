@@ -70,7 +70,7 @@ def deliver_document(req: DeliveryRequest, *, session=None, environ=None) -> str
     version = env.get("WHATSAPP_GRAPH_VERSION", "v23.0")
     if not token or not sender or not re.fullmatch(r"[0-9]{5,30}", sender):
         raise RuntimeError("Missing WhatsApp Business API configuration")
-    if not re.fullmatch(r"v[0-9]+\\.[0-9]+", version):
+    if not re.fullmatch(r"v[0-9]+\.[0-9]+", version):
         raise ValueError("Invalid Graph API version")
     client = session or requests
     endpoint = "https://graph.facebook.com/" + version + "/" + sender + "/messages"
