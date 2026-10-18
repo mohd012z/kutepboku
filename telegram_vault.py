@@ -22,12 +22,15 @@ class TelegramVaultClient:
         self.base_url = "https://api.telegram.org/bot" + self.bot_token
 
     def _api(self, method, *, data=None, files=None):
+        failed = False
         try:
             response = requests.post(self.base_url + "/" + method, data=data, files=files, timeout=30)
             response.raise_for_status()
             payload = response.json()
         except (requests.RequestException, ValueError):
-            raise RuntimeError("Telegram staging API request failed") from None
+            failed = True
+        if failed:
+            raise RuntimeError("Telegram staging API request failed")
         if not isinstance(payload, dict) or payload.get("ok") is not True:
             raise RuntimeError("Telegram staging API rejected request")
         return payload.get("result")
@@ -67,12 +70,15 @@ class TelegramVaultClient:
             raise FileExistsError("Download destination exists")
         if expected_size is not None and not 0 < expected_size <= MAX_SNAPSHOT_SIZE:
             raise ValueError("Expected size out of bounds")
+        failed = False
         try:
             response = requests.get(self.base_url + "/getFile", params={"file_id": file_id}, timeout=15)
             response.raise_for_status()
             metadata = response.json()
         except (requests.RequestException, ValueError):
-            raise RuntimeError("Telegram file metadata request failed") from None
+            failed = True
+        if failed:
+            raise RuntimeError("Telegram file metadata request failed")
         if not isinstance(metadata, dict) or metadata.get("ok") is not True:
             raise RuntimeError("Telegram file metadata unavailable")
         try:
@@ -93,6 +99,7 @@ class TelegramVaultClient:
         total = 0
         try:
             with os.fdopen(fd, "wb") as output:
+                download_failed = False
                 try:
                     with requests.get("https://api.telegram.org/file/bot" + self.bot_token + "/" + server_path,
                                       stream=True, timeout=45) as download:
@@ -106,7 +113,9 @@ class TelegramVaultClient:
                             output.write(chunk)
                             digest.update(chunk)
                 except requests.RequestException:
-                    raise RuntimeError("Telegram staging download failed") from None
+                    download_failed = True
+                if download_failed:
+                    raise RuntimeError("Telegram staging download failed")
                 output.flush()
                 os.fsync(output.fileno())
             if not total or (server_size is not None and total != server_size) or (expected_size is not None and total != expected_size):
