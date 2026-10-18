@@ -20,5 +20,21 @@ jobs:
         run: python -m pip install -r requirements.txt
       - name: Compile Python sources
         run: python -m compileall -q .
-      - name: Run offline unit tests
-        run: python -m unittest discover -s tests -v
+      - name: Run offline unit tests with coverage
+        run: coverage run --source=. --omit='*/tests/*,*/test_*.py' -m unittest discover -s tests -v
+      - name: Coverage summary
+        if: always()
+        run: |
+          if [ -f .coverage ]; then
+            coverage report -m
+            coverage xml -o coverage.xml
+          else
+            echo 'Coverage data not generated.'
+          fi
+      - name: Upload coverage XML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: ignore
