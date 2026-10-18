@@ -1,0 +1,48 @@
+name: Telegram Vault Live Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Explicitly authorize a disposable Telegram staging round-trip'
+        required: true
+        type: choice
+        options:
+          - 'NO'
+          - 'RUN_STAGING_VAULT'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: telegram-vault-staging
+  cancel-in-progress: false
+
+jobs:
+  staging-round-trip:
+    if: ${{ inputs.confirmation == 'RUN_STAGING_VAULT' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: telegram-staging
+    env:
+      RUN_LIVE_TELEGRAM_TESTS: '1'
+      TELEGRAM_TEST_BOT_TOKEN: ${{ secrets.TELEGRAM_TEST_BOT_TOKEN }}
+      TELEGRAM_TEST_CHANNEL_ID: ${{ secrets.TELEGRAM_TEST_CHANNEL_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate staging secrets are configured
+        shell: bash
+        run: |
+          test -n "$TELEGRAM_TEST_BOT_TOKEN" || { echo 'Staging bot token is missing'; exit 1; }
+          test -n "$TELEGRAM_TEST_CHANNEL_ID" || { echo 'Staging channel ID is missing'; exit 1; }
+          echo "::add-mask::$TELEGRAM_TEST_BOT_TOKEN"
+          echo "::add-mask::$TELEGRAM_TEST_CHANNEL_ID"
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Execute disposable staging round-trip only
+        run: python -m unittest discover -s tests -p 'test_live_telegram_vault.py' -v
