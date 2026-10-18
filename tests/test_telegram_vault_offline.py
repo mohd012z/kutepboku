@@ -3,7 +3,7 @@ import hashlib
 import os
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, MagicMock, patch
 
 from cryptography.fernet import Fernet
 from telegram_vault import TelegramVaultClient
@@ -46,7 +46,7 @@ class VaultOfflineTests(unittest.TestCase):
         destination = os.path.join(self.temp.name, "download.enc")
         metadata = Mock()
         metadata.json.return_value = {"ok": True, "result": {"file_path": "files/test", "file_size": reported}}
-        stream = Mock()
+        stream = MagicMock()
         stream.iter_content.return_value = chunks
         stream.__enter__ = Mock(return_value=stream)
         stream.__exit__ = Mock(return_value=False)
