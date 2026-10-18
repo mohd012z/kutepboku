@@ -5,9 +5,10 @@ import os
 from pathlib import Path
 
 from telegram import InlineKeyboardMarkup, Update
-from telegram.ext import ApplicationBuilder, CallbackQueryHandler, MessageHandler, filters
+from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
 from agent import BOT_NAME
+from cloud_backup import backup_database_snapshot
 from bot_router import handle_update
 from restore_db import verify_database_integrity
 from search_provider import verified_search
@@ -65,6 +66,27 @@ async def verify_identity(application):
     log.info("Verified bot @%s", me.username)
 
 
+async def manual_backup_command(update, context):
+    """Only the configured admin may upload an encrypted snapshot."""
+    admin_id = os.getenv("ADMIN_CHAT_ID", "").strip()
+    user = update.effective_user
+    message = update.message
+    if not admin_id or not admin_id.isdecimal() or user is None or str(user.id) != admin_id:
+        if message:
+            await message.reply_text("Not authorized.")
+        return
+    if message is None or update.effective_chat is None or update.effective_chat.type != "private":
+        return
+    await message.reply_text("Creating encrypted database backup...")
+    try:
+        message_id = await asyncio.to_thread(backup_database_snapshot)
+    except Exception:
+        log.exception("Manual backup failed")
+        await message.reply_text("Backup failed. Check secure server logs.")
+        return
+    await message.reply_text("Encrypted backup uploaded and pinned (message %d)." % message_id)
+
+
 def main():
     logging.basicConfig(level=logging.INFO)
     token = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -76,6 +98,7 @@ def main():
     if db.exists() and not verify_database_integrity(db):
         raise SystemExit("Existing session database failed integrity validation")
     application = ApplicationBuilder().token(token).post_init(verify_identity).build()
+    application.add_handler(CommandHandler("backup", manual_backup_command))
     application.add_handler(CallbackQueryHandler(telegram_handler, pattern=r"^sr:"))
     application.add_handler(MessageHandler(filters.TEXT, telegram_handler))
     log.info("Starting polling; startup recovery is deliberately disabled")
