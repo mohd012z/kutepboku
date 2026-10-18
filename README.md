@@ -35,6 +35,10 @@ The interactive router, delivery gateways and encrypted local restore utilities 
 
 The optional live polling runner (`python main.py`) supports `/backup` in a private chat, restricted to the Telegram **user ID** configured in `ADMIN_CHAT_ID`. Set `TELEGRAM_BACKUP_CHANNEL_ID` to a private channel where the bot has permission to post documents and pin messages. Generate a Fernet key and set `BACKUP_ENCRYPTION_KEY`; retain it securely outside the bot or recovery will be impossible. `BOT_DB_PATH` selects the running bot's SQLite database. The command creates a consistent SQLite snapshot, encrypts it, uploads it, then requests pinning. It never sends the unencrypted database to Telegram. Backup is **not** automatic restore and is not verified live.
 
+## Admin diagnostics
+
+Send `/status` in a private chat with the polling bot as the user identified by `ADMIN_CHAT_ID`. The command reports process uptime, SQLite database presence and size, read-only integrity status, total stored sessions and sessions updated in the last 24 hours. It does not expose user identifiers, does not create a missing database, and does not prove that scheduled GitHub Actions or external search providers are healthy.
+
 ## Limitations
 
 GitHub Actions runs only after the workflow reaches the default branch. Scheduled execution may be delayed. getMe does not confirm chat delivery permissions. Real Telegram delivery requires credentials and a live test. External catalog metadata is not a substitute for independent rights review.
