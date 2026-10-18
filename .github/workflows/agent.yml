@@ -29,7 +29,8 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          SCOUT_QUERY: ${{ inputs.search_query || vars.SCOUT_QUERY || 'python programming' }}
+          CUSTOM_QUERY: ${{ github.event_name == 'workflow_dispatch' && inputs.search_query || '' }}
+          SCOUT_QUERY: ${{ vars.SCOUT_QUERY || 'python programming' }}
         run: python agent.py
       # The scheduled scout does not operate the persistent polling database.
       # Backup and recovery must run on the host owning that database.
