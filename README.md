@@ -1,3 +1,24 @@
-# kutepboku
+# msasoup
 
-Repository for the msasoup eBook research agent. See the feature branch for the implementation.
+Autonomous open-license eBook scout delivering to Telegram [@mysoupsearchbot](https://t.me/mysoupsearchbot).
+
+## Setup
+
+1. Create the Telegram bot with BotFather, start a chat with it, and obtain your chat ID.
+2. Set GitHub Actions secrets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
+3. Optionally set repository variable `SCOUT_QUERY` (default: `python programming`).
+4. Enable GitHub Actions and allow workflow write permission to persist delivery history.
+5. Run **msasoup daily delivery** manually; daily schedule is 00:00 UTC / 08:00 Malaysia time.
+
+## Tests
+
+```sh
+python -m pip install -r requirements.txt
+python -m unittest discover -s tests -v
+```
+
+The agent verifies the bot identity via Telegram getMe before searching. It discovers public scans through Open Library, checks Internet Archive licensing metadata, validates document bytes, hashes downloads for deduplication and sends authorized documents. Missing or unsupported licenses are rejected.
+
+## Limitations
+
+GitHub Actions runs only after the workflow reaches the default branch. Scheduled execution may be delayed. getMe does not confirm chat delivery permissions. Real Telegram delivery requires credentials and a live test. External catalog metadata is not a substitute for independent rights review.
