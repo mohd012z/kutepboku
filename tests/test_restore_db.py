@@ -57,7 +57,7 @@ class RestoreDatabaseTests(unittest.TestCase):
             archive = folder / "corrupt.enc"
             archive.write_bytes(Fernet(key).encrypt(b"not a sqlite database"))
             target = folder / "sessions.db"
-            with self.assertRaises(sqlite3.DatabaseError):
+            with self.assertRaisesRegex(ValueError, "SQLite integrity or required table validation failed"):
                 restore_snapshot(archive, target, key)
             self.assertFalse(target.exists())
 
