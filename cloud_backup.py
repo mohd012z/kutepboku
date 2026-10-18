@@ -20,10 +20,10 @@ def backup_database_snapshot(*, db_path=None, token=None, channel_id=None,
     The snapshot is consistent even when SQLite WAL mode is in use.
     Failure to pin raises an exception; the uploaded document may still exist.
     """
-    path = Path(db_path or os.getenv("BOT_DB_PATH", "bot_sessions.db"))
-    token = token or os.getenv("TELEGRAM_BOT_TOKEN")
-    channel_id = channel_id or os.getenv("TELEGRAM_BACKUP_CHANNEL_ID")
-    encryption_key = encryption_key or os.getenv("BACKUP_ENCRYPTION_KEY")
+    path = Path(db_path if db_path is not None else os.getenv("BOT_DB_PATH", "bot_sessions.db"))
+    token = token if token is not None else os.getenv("TELEGRAM_BOT_TOKEN")
+    channel_id = channel_id if channel_id is not None else os.getenv("TELEGRAM_BACKUP_CHANNEL_ID")
+    encryption_key = encryption_key if encryption_key is not None else os.getenv("BACKUP_ENCRYPTION_KEY")
     if not token or not channel_id or not encryption_key:
         raise ValueError("Telegram token, backup channel and encryption key are required")
     if not path.is_file():
