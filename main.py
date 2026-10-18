@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import os
+import time
 from pathlib import Path
 
 from telegram import InlineKeyboardMarkup, Update
@@ -12,6 +13,9 @@ from cloud_backup import backup_database_snapshot
 from bot_router import handle_update
 from restore_db import verify_database_integrity
 from search_provider import verified_search
+from status_metrics import format_status, status_snapshot
+
+PROCESS_STARTED_AT = time.monotonic()
 
 log = logging.getLogger(__name__)
 
@@ -87,6 +91,25 @@ async def manual_backup_command(update, context):
     await message.reply_text("Encrypted backup uploaded and pinned (message %d)." % message_id)
 
 
+async def status_command(update, context):
+    """Private-chat admin diagnostics; deny if ADMIN_CHAT_ID is unset."""
+    admin_id = os.getenv("ADMIN_CHAT_ID", "").strip()
+    user = update.effective_user
+    message = update.message
+    if not admin_id.isdecimal() or user is None or str(user.id) != admin_id:
+        if message is not None:
+            await message.reply_text("Not authorized.")
+        return
+    if message is None or update.effective_chat is None or update.effective_chat.type != "private":
+        return
+    try:
+        info = await asyncio.to_thread(status_snapshot, started_at=PROCESS_STARTED_AT)
+        await message.reply_text(format_status(info))
+    except Exception:
+        log.exception("Status diagnostics failed")
+        await message.reply_text("Diagnostics unavailable. Check secure server logs.")
+
+
 def main():
     logging.basicConfig(level=logging.INFO)
     token = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -99,6 +122,7 @@ def main():
         raise SystemExit("Existing session database failed integrity validation")
     application = ApplicationBuilder().token(token).post_init(verify_identity).build()
     application.add_handler(CommandHandler("backup", manual_backup_command))
+    application.add_handler(CommandHandler("status", status_command))
     application.add_handler(CallbackQueryHandler(telegram_handler, pattern=r"^sr:"))
     application.add_handler(MessageHandler(filters.TEXT, telegram_handler))
     log.info("Starting polling; startup recovery is deliberately disabled")
