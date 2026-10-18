@@ -4,10 +4,36 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from cryptography.fernet import Fernet, InvalidToken
-from restore_db import restore_snapshot
+from restore_db import restore_snapshot, verify_database_integrity
 
 
 class RestoreDatabaseTests(unittest.TestCase):
+    def test_valid_database_integrity(self):
+        with TemporaryDirectory() as directory:
+            db_path = Path(directory) / "valid.db"
+            with sqlite3.connect(db_path) as db:
+                db.execute("CREATE TABLE user_sessions (user_id INTEGER PRIMARY KEY)")
+                db.execute("INSERT INTO user_sessions VALUES (123)")
+            self.assertTrue(verify_database_integrity(db_path))
+
+    def test_garbage_database_integrity(self):
+        with TemporaryDirectory() as directory:
+            db_path = Path(directory) / "corrupt.db"
+            db_path.write_bytes(b"not a sqlite database")
+            self.assertFalse(verify_database_integrity(db_path))
+
+    def test_malformed_header_integrity(self):
+        with TemporaryDirectory() as directory:
+            db_path = Path(directory) / "malformed.db"
+            db_path.write_bytes(b"SQLite format 3\\0" + b"\\xff" * 400)
+            self.assertFalse(verify_database_integrity(db_path))
+
+    def test_missing_database_does_not_get_created(self):
+        with TemporaryDirectory() as directory:
+            db_path = Path(directory) / "missing.db"
+            self.assertFalse(verify_database_integrity(db_path))
+            self.assertFalse(db_path.exists())
+
     def test_restore_valid_encrypted_database(self):
         with TemporaryDirectory() as directory:
             folder = Path(directory)
