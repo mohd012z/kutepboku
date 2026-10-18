@@ -1,6 +1,7 @@
 import sqlite3
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 import unittest
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -95,6 +96,24 @@ class RestoreDatabaseTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 restore_snapshot(archive, target, key)
             self.assertFalse(target.exists())
+
+
+    def test_integrity_check_non_ok_fails_closed(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "sessions.db"
+            path.write_bytes(b"placeholder")
+            with patch("restore_db.sqlite3.connect") as connect:
+                connect.return_value.__enter__.return_value.execute.return_value.fetchone.return_value = ("database disk image is malformed",)
+                self.assertFalse(verify_database_integrity(path))
+            self.assertTrue(path.exists())
+
+    def test_integrity_check_sqlite_exception_fails_closed(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "sessions.db"
+            path.write_bytes(b"placeholder")
+            with patch("restore_db.sqlite3.connect", side_effect=sqlite3.DatabaseError("corrupt")):
+                self.assertFalse(verify_database_integrity(path))
+            self.assertTrue(path.exists())
 
 
 if __name__ == "__main__":
