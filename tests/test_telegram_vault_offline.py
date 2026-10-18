@@ -187,5 +187,50 @@ class VaultOfflineTests(unittest.TestCase):
         self.assertEqual(os.listdir(self.temp.name), [])
 
 
+    def test_network_exception_chain_contains_no_staging_token(self):
+        import requests
+        key = Fernet.generate_key()
+        source = os.path.join(self.temp.name, "secret-test.enc")
+        with open(source, "wb") as output:
+            output.write(Fernet(key).encrypt(b"test payload"))
+        secret = self.client.bot_token
+        url = "https://api.telegram.org/bot" + secret + "/sendDocument"
+        raw = requests.RequestException("Failed to connect: " + url)
+        raw.request = requests.Request("POST", url).prepare()
+        with patch("telegram_vault.requests.post", side_effect=raw):
+            with self.assertRaises(RuntimeError) as raised:
+                self.client.upload_snapshot(source, key)
+        current = raised.exception
+        visited = set()
+        while current is not None and id(current) not in visited:
+            visited.add(id(current))
+            self.assertNotIn(secret, repr(current))
+            self.assertNotIn(secret, repr(current.args))
+            request = getattr(current, "request", None)
+            if request is not None:
+                self.assertNotIn(secret, str(getattr(request, "url", "")))
+            self.assertIsNone(current.__cause__)
+            current = current.__context__
+        self.assertEqual(len(visited), 1)
+
+    def test_download_exception_chain_contains_no_staging_token(self):
+        import requests
+        destination = os.path.join(self.temp.name, "secret-download.enc")
+        metadata = Mock()
+        metadata.json.return_value = {"ok": True, "result": {"file_path": "files/test"}}
+        stream = MagicMock()
+        stream.__enter__.return_value = stream
+        stream.iter_content.side_effect = requests.ConnectionError(
+            "https://api.telegram.org/file/bot" + self.client.bot_token + "/files/test"
+        )
+        with patch("telegram_vault.requests.get", side_effect=[metadata, stream]):
+            with self.assertRaises(RuntimeError) as raised:
+                self.client.download_file_by_id("file-id", destination)
+        self.assertEqual(str(raised.exception), "Telegram staging download failed")
+        self.assertIsNone(raised.exception.__context__)
+        self.assertIsNone(raised.exception.__cause__)
+        self.assertFalse(os.path.lexists(destination))
+        self.assertEqual(os.listdir(self.temp.name), [])
+
 if __name__ == "__main__":
     unittest.main()
