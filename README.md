@@ -1,5 +1,7 @@
 # msasoup
 
+[![msasoup CI](https://github.com/mohd012z/kutepboku/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mohd012z/kutepboku/actions/workflows/ci.yml)
+
 Autonomous open-license eBook scout delivering to Telegram [@mysoupsearchbot](https://t.me/mysoupsearchbot).
 
 ## Setup
@@ -16,6 +18,10 @@ Autonomous open-license eBook scout delivering to Telegram [@mysoupsearchbot](ht
 python -m pip install -r requirements.txt
 python -m unittest discover -s tests -v
 ```
+
+The CI workflow runs the test suite under Coverage.py and uploads `coverage-xml` and `code-coverage-report` artifacts (14-day retention). Download `code-coverage-report` from a workflow run, extract it, and open `index.html` to inspect covered and missing lines. The CI badge above reflects the default branch, not the unmerged pull request.
+
+Codecov upload and its percentage badge are **not yet configured**. The local XML artifact does not automatically publish results to Codecov.
 
 The agent verifies the bot identity via Telegram getMe before searching. It discovers public scans through Open Library, checks Internet Archive licensing metadata, validates document bytes, hashes downloads for deduplication and sends authorized documents. Missing or unsupported licenses are rejected.
 
