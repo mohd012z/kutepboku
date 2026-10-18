@@ -22,12 +22,13 @@ jobs:
         run: python -m compileall -q .
       - name: Run offline unit tests with coverage
         run: coverage run --source=. --omit='*/tests/*,*/test_*.py' -m unittest discover -s tests -v
-      - name: Coverage summary
+      - name: Coverage summary and reports
         if: always()
         run: |
           if [ -f .coverage ]; then
             coverage report -m
             coverage xml -o coverage.xml
+            coverage html -d htmlcov
           else
             echo 'Coverage data not generated.'
           fi
@@ -37,4 +38,13 @@ jobs:
         with:
           name: coverage-xml
           path: coverage.xml
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Upload HTML coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-coverage-report
+          path: htmlcov/
+          retention-days: 14
           if-no-files-found: ignore
