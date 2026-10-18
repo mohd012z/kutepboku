@@ -9,6 +9,7 @@ from pathlib import Path
 from telegram import InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
+from logging_config import initialize_secure_logging
 from agent import BOT_NAME
 from cloud_backup import backup_database_snapshot
 from bot_router import handle_update
@@ -135,6 +136,7 @@ async def status_command(update, context):
 
 def main():
     logging.basicConfig(level=logging.INFO)
+    initialize_secure_logging(explicit_tokens=[os.getenv("TELEGRAM_BOT_TOKEN"), os.getenv("TELEGRAM_TEST_BOT_TOKEN")])
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not token:
         raise SystemExit("TELEGRAM_BOT_TOKEN is required")
