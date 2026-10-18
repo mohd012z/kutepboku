@@ -29,7 +29,11 @@ The agent verifies the bot identity via Telegram getMe before searching. It disc
 
 The current scheduled entry point is `agent.py` at the repository root. Supporting modules also remain at the root until their imports and execution paths can be migrated safely. Tests are under `tests/`. See [CONTRIBUTING.md](CONTRIBUTING.md) for development instructions.
 
-The interactive router, delivery gateways and encrypted local restore utilities require live integration testing before production use. Automatic Telegram vault backup/recovery and Google/Gemini search are not currently verified or deployed. The optional runner backup hook is disabled by default and is not a persistent-host backup solution.
+The interactive router, delivery gateways and encrypted local restore utilities require live integration testing before production use. A manual, admin-restricted encrypted Telegram vault backup is implemented but not live-tested; automatic recovery is not implemented. Google/Gemini search is implemented as a fail-closed adapter but is not live-tested or deployed. The optional runner backup hook is disabled by default and is not a persistent-host backup solution.
+
+## Manual encrypted backup
+
+The optional live polling runner (`python main.py`) supports `/backup` in a private chat, restricted to the Telegram **user ID** configured in `ADMIN_CHAT_ID`. Set `TELEGRAM_BACKUP_CHANNEL_ID` to a private channel where the bot has permission to post documents and pin messages. Generate a Fernet key and set `BACKUP_ENCRYPTION_KEY`; retain it securely outside the bot or recovery will be impossible. `BOT_DB_PATH` selects the running bot's SQLite database. The command creates a consistent SQLite snapshot, encrypts it, uploads it, then requests pinning. It never sends the unencrypted database to Telegram. Backup is **not** automatic restore and is not verified live.
 
 ## Limitations
 
