@@ -34,7 +34,7 @@ class NonLoggingSinkTests(unittest.TestCase):
         try:
             connection.set_debuglevel(1)
             with contextlib.redirect_stdout(output):
-                connection.sock = type("FakeSocket", (), {"sendall": lambda self, data: None})()
+                connection.sock = type("FakeSocket", (), {"sendall": lambda self, data: None, "close": lambda self: None})()
                 connection.send(b"GET /bot" + TOKEN.encode() + b"/getMe HTTP/1.1\\r\\n\\r\\n")
             self.assertIn(TOKEN, output.getvalue(),
                           "Expected to demonstrate raw HTTP debug output")
