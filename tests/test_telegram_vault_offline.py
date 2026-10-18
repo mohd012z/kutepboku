@@ -93,5 +93,36 @@ class VaultOfflineTests(unittest.TestCase):
         self.assertEqual(os.listdir(self.temp.name), [])
 
 
+    def test_interrupted_download_sanitizes_error_and_removes_temp(self):
+        import requests
+        destination = os.path.join(self.temp.name, "download.enc")
+        metadata = Mock()
+        metadata.json.return_value = {"ok": True, "result": {"file_path": "files/test"}}
+        stream = MagicMock()
+        stream.iter_content.side_effect = requests.ConnectionError(
+            "https://api.telegram.org/file/botstaging/files/test"
+        )
+        stream.__enter__.return_value = stream
+        with patch("telegram_vault.requests.get", side_effect=[metadata, stream]):
+            with self.assertRaises(RuntimeError) as raised:
+                self.client.download_file_by_id("file-id", destination)
+        self.assertNotIn("botstaging", str(raised.exception))
+        self.assertEqual(os.listdir(self.temp.name), [])
+
+    def test_cleanup_failure_is_reported_after_publication(self):
+        destination = os.path.join(self.temp.name, "download.enc")
+        metadata = Mock()
+        metadata.json.return_value = {"ok": True, "result": {"file_path": "files/test", "file_size": 4}}
+        stream = MagicMock()
+        stream.iter_content.return_value = [b"data"]
+        stream.__enter__.return_value = stream
+        with patch("telegram_vault.requests.get", side_effect=[metadata, stream]), \
+             patch("telegram_vault.os.unlink", side_effect=PermissionError("blocked")):
+            with self.assertRaisesRegex(RuntimeError, "cleanup failed"):
+                self.client.download_file_by_id("file-id", destination)
+        with open(destination, "rb") as output:
+            self.assertEqual(output.read(), b"data")
+
+
 if __name__ == "__main__":
     unittest.main()
