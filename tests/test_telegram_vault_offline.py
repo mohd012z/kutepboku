@@ -332,5 +332,47 @@ class VaultOfflineTests(unittest.TestCase):
         with open(destination, "rb") as stream:
             self.assertEqual(stream.read(), b"other")
 
+
+    def test_api_success_returns_result(self):
+        response = Mock()
+        response.json.return_value = {"ok": True, "result": {"message_id": 17}}
+        with patch("telegram_vault.requests.post", return_value=response):
+            self.assertEqual(self.client._api("sendDocument"), {"message_id": 17})
+
+    def test_upload_changed_between_stat_and_read(self):
+        key = Fernet.generate_key()
+        source = os.path.join(self.temp.name, "changing.enc")
+        with open(source, "wb") as output:
+            output.write(Fernet(key).encrypt(b"initial"))
+        actual_size = os.path.getsize(source)
+        with patch("telegram_vault.os.path.getsize", return_value=actual_size - 1), \
+             patch.object(self.client, "_api") as api:
+            with self.assertRaisesRegex(ValueError, "Snapshot changed during validation"):
+                self.client.upload_snapshot(source, key)
+            api.assert_not_called()
+
+    def test_expected_size_disagrees_with_server_metadata(self):
+        destination = os.path.join(self.temp.name, "mismatch.enc")
+        response = Mock()
+        response.json.return_value = {
+            "ok": True, "result": {"file_path": "files/snapshot.enc", "file_size": 8}
+        }
+        with patch("telegram_vault.requests.get", return_value=response) as get:
+            with self.assertRaisesRegex(ValueError, "Telegram file size mismatch"):
+                self.client.download_file_by_id("id", destination, expected_size=7)
+        get.assert_called_once()
+        self.assertFalse(os.path.lexists(destination))
+
+    def test_empty_stream_chunk_is_ignored_and_download_continues(self):
+        payload = b"encrypted-data"
+        destination = self._download(
+            [b"encrypted-", b"", b"data"],
+            reported=len(payload),
+            expected=len(payload),
+            digest=hashlib.sha256(payload).hexdigest(),
+        )
+        with open(destination, "rb") as stream:
+            self.assertEqual(stream.read(), payload)
+
 if __name__ == "__main__":
     unittest.main()
