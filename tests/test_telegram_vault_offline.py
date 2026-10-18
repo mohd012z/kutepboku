@@ -193,13 +193,14 @@ class VaultOfflineTests(unittest.TestCase):
         source = os.path.join(self.temp.name, "secret-test.enc")
         with open(source, "wb") as output:
             output.write(Fernet(key).encrypt(b"test payload"))
-        secret = self.client.bot_token
+        secret = "123456789:TEST_SECRET_TOKEN_FOR_EXCEPTION_CHAIN"
+        client = TelegramVaultClient(bot_token=secret, channel_id="-1002")
         url = "https://api.telegram.org/bot" + secret + "/sendDocument"
         raw = requests.RequestException("Failed to connect: " + url)
         raw.request = requests.Request("POST", url).prepare()
         with patch("telegram_vault.requests.post", side_effect=raw):
             with self.assertRaises(RuntimeError) as raised:
-                self.client.upload_snapshot(source, key)
+                client.upload_snapshot(source, key)
         current = raised.exception
         visited = set()
         while current is not None and id(current) not in visited:
