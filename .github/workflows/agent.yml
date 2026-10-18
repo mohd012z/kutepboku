@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -r requirements.txt
+      - run: python -m pip install -r requirements.txt
       - run: python -m unittest discover -s tests -v
       - name: Search and deliver
         env:
@@ -25,6 +25,19 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           SCOUT_QUERY: ${{ vars.SCOUT_QUERY || 'python programming' }}
         run: python agent.py
+      # This hook backs up only files present on THIS runner.
+      # Persistent bot_sessions.db must be backed up on its actual host.
+      # cloud_backup.py is not yet committed; opt-in is disabled by default.
+      - name: Optional runner-scoped backup
+        if: ${{ vars.ENABLE_RUNNER_BACKUP == 'true' }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_BACKUP_CHANNEL_ID: ${{ secrets.TELEGRAM_BACKUP_CHANNEL_ID }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: |
+          test -f cloud_backup.py || { echo 'cloud_backup.py is not implemented'; exit 1; }
+          test -n "$BACKUP_ENCRYPTION_KEY" || { echo 'Backup encryption key missing'; exit 1; }
+          python cloud_backup.py
       - name: Persist history
         run: |
           if [ -f state/history.json ]; then
