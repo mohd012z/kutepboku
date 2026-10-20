@@ -141,7 +141,7 @@ $("q").addEventListener("keydown", e=>{ if(e.key==="Enter") doSearch(1); });
 
 function buildQuery(q){
   const tokens = q.trim().split(/\s+/).filter(Boolean).slice(0,6);
-  let query = "(" + tokens.join(" OR ") + ")";
+  let query = "(" + tokens.join(" AND ") + ")";
   const fmts=[]; if(fmtOn.epub) fmts.push("format:EPUB"); if(fmtOn.pdf) fmts.push("format:PDF");
   if(fmts.length) query += " AND (" + fmts.join(" OR ") + ")";
   const y1=$("y1").value, y2=$("y2").value;
