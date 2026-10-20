@@ -37,17 +37,21 @@ CATEGORIES = [
 HOME_TEXT = (
     "🤖 msasoup — open-license eBook agent\n\n"
     "Pick a category or just tell me what you need, e.g. "
-    "\"find a quantum computing book\". I search Internet Archive, "
-    "keep only open-licensed (CC) books, and can send the file straight to you."
+    "\"find a quantum computing book\". I search the whole open web "
+    "(Internet Archive, Project Gutenberg, Open Library), keep only "
+    "open-licensed books, and can send the file straight to you."
 )
 
 HELP_TEXT = (
     "How I work:\n"
     "• Tap a category button — I search open-licensed books for it.\n"
     "• Or type any request — I understand plain language.\n"
+    "• I search across the whole open web: Internet Archive, Project "
+    "Gutenberg and Open Library — only openly licensed books are offered "
+    "(fail-closed: rather than hand you an unlicensed file, I return nothing).\n"
     "• Pick a book from the list, then choose Send file (I download and "
-    "send it) or Link (I send the archive.org link).\n"
-    "• Bottom-left ⋮ menu = quick commands (see /help).\n"
+    "send it) or Link (I send the direct download link).\n"
+    "• Bottom-left ⋮ menu = quick commands (see below).\n"
     "\nCommands:\n"
     "/start — main menu\n"
     "/forex — forex trading books (CC)\n"
