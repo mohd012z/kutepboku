@@ -61,7 +61,10 @@ async def telegram_handler(update, context):
 
     class UpdateProxy:
         effective_user = update.effective_user
-        message = MessageProxy(message) if update.message else None
+        # `message = ...` makes `message` a class-local in this body; the RHS
+        # must read the non-shadowed source (identical to the local `message`
+        # set above from update.effective_message).
+        message = MessageProxy(update.effective_message) if update.message else None
         callback_query = CallbackProxy(callback) if callback else None
 
     await handle_update(UpdateProxy(), context, search_provider=verified_search)
