@@ -36,6 +36,7 @@ async def telegram_handler(update, context):
     callback = update.callback_query
     original_reply = getattr(message, "reply_text", None) if message else None
     original_edit = getattr(callback, "edit_message_text", None) if callback else None
+    original_answer = getattr(callback, "answer", None) if callback else None
     # PTB's reply_text requires InlineKeyboardMarkup, not a raw Bot API dict.
     # Adapt at the application boundary rather than monkeypatching Telegram objects.
     class MessageProxy:
@@ -55,7 +56,8 @@ async def telegram_handler(update, context):
             self.message = getattr(original, "message", None)
 
         async def answer(self, *args, **kwargs):
-            return await original.answer(*args, **kwargs)
+            # closure over original_answer (`original` is not in scope here)
+            return await original_answer(*args, **kwargs)
 
         async def edit_message_text(self, text, **kwargs):
             if "reply_markup" in kwargs:
