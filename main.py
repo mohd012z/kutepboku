@@ -50,6 +50,9 @@ async def telegram_handler(update, context):
     class CallbackProxy:
         def __init__(self, original):
             self.data = original.data
+            # The router replies on callback.message for delivery progress;
+            # expose the real message object at the API boundary.
+            self.message = getattr(original, "message", None)
 
         async def answer(self, *args, **kwargs):
             return await original.answer(*args, **kwargs)
@@ -63,8 +66,14 @@ async def telegram_handler(update, context):
         effective_user = update.effective_user
         # `message = ...` makes `message` a class-local in this body; the RHS
         # must read the non-shadowed source (identical to the local `message`
-        # set above from update.effective_message).
-        message = MessageProxy(update.effective_message) if update.message else None
+        # set above from update.effective_message). For callback updates,
+        # PTB leaves update.message None; expose the callback's message so the
+        # router can reply/progress in the callback flow too.
+        message = MessageProxy(
+            update.effective_message
+            if update.message is not None
+            else (callback.message if callback is not None else None)
+        ) if (update.message is not None or (callback is not None and getattr(callback, "message", None) is not None)) else None
         callback_query = CallbackProxy(callback) if callback else None
 
     await handle_update(UpdateProxy(), context, search_provider=verified_search)
