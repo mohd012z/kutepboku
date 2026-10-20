@@ -12,11 +12,19 @@ import asyncio
 import os
 import secrets
 
+import requests
+
 from session_manager import SessionManager
 from search_pagination import (build_search_keyboard, new_search_session,
                                process_search_callback)
 from ai_assistant import (HELP_TEXT, _chat_reply, ask_intent, category_topic,
-                          deliver_file, delivery_keyboard, home_menu)
+                          deliver_file, delivery_keyboard, home_menu, mql5_menu)
+from mql5_scout import (MQL5_LISTINGS, mql5_item_by_index, mql5_paged_message,
+                        scrape_trending)
+from mql5_scout import deliver_file as mql5_deliver_file
+
+# callback key ("mt5:ea") -> (market, kind)
+_MQL5_LOOKUP = {key: (market, kind) for key, _label, market, kind in MQL5_LISTINGS}
 
 db = None
 
@@ -178,6 +186,81 @@ async def handle_update(update, context, *, search_provider=None, store=None):
                 return
             await callback.answer("Sending link…" if mode == "l" else "Downloading…")
             await _deliver(callback, user_id, store, book, mode)
+            return
+        if data.startswith("mql5:"):
+            # trending listing request: "mql5:mt5:ea" | "mql5:mt5:ind" | ...
+            if data == "mql5:menu":
+                menu = mql5_menu()
+                await callback.edit_message_text(menu["text"],
+                                                 reply_markup=menu["reply_markup"])
+                return
+            parts = data.split(":")
+            key = ":".join(parts[1:])
+            if key not in _MQL5_LOOKUP:
+                await callback.answer("Unknown MQL5 listing.", show_alert=True)
+                return
+            market, kind = _MQL5_LOOKUP[key]
+            await callback.answer("📡 Loading MQL5 trending…")
+            try:
+                items = await asyncio.to_thread(scrape_trending, market, kind)
+            except Exception:
+                await callback.edit_message_text(
+                    "⚠️ Couldn't load the MQL5 Code Base right now "
+                    "(site busy or layout changed). Try again in a minute.")
+                return
+            store.set_session(user_id, "MQL5_LISTING",
+                              {"market": market, "kind": kind,
+                               "items": items, "page": 0})
+            page_msg = mql5_paged_message(items, 0)
+            await callback.edit_message_text(page_msg["text"],
+                                             reply_markup=page_msg["reply_markup"])
+            return
+        if data.startswith("mql5s:"):
+            # page navigation within a stored MQL5 listing
+            state, sdata = store.get_session(user_id)
+            if state != "MQL5_LISTING" or not isinstance(sdata.get("items"), list):
+                await callback.answer("This listing has expired.", show_alert=True)
+                return
+            try:
+                page = int(data[6:])
+                msg = mql5_paged_message(sdata["items"], page)
+            except ValueError:
+                await callback.answer("Bad page.", show_alert=True)
+                return
+            sdata["page"] = page
+            store.set_session(user_id, state, sdata)
+            await callback.answer("")
+            await callback.edit_message_text(msg["text"], reply_markup=msg["reply_markup"])
+            return
+        if data.startswith("dlm:"):
+            # send one item's file from the stored listing
+            state, sdata = store.get_session(user_id)
+            items = sdata.get("items") if isinstance(sdata, dict) else None
+            if state != "MQL5_LISTING" or not isinstance(items, list):
+                await callback.answer("This listing has expired.", show_alert=True)
+                return
+            try:
+                item = mql5_item_by_index(items, data[4:])
+            except ValueError as err:
+                await callback.answer(str(err), show_alert=True)
+                return
+            message = callback.message
+            token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+            chat_id = str(os.getenv("TELEGRAM_DELIVERY_CHAT_ID") or user_id)
+            await callback.answer("⏳ Downloading…")
+            try:
+                kind, url, size = await asyncio.to_thread(
+                    mql5_deliver_file, token, chat_id, item,
+                    session=requests)
+            except Exception:
+                if message is not None:
+                    await message.reply_text(
+                        "⚠️ Download failed — item page link instead:\n" + item["url"])
+                return
+            if message is not None:
+                await message.reply_text(
+                    "✅ Sent " + item["title"][:80] + " (" + kind + ", "
+                    + str(round(size / 1024)) + " KB)\n" + item["url"])
             return
         if data.startswith("ui:"):
             action = data[3:]

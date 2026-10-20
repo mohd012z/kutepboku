@@ -31,6 +31,7 @@ CATEGORIES = [
     ("econ", "📈 Economics", "economics"),
     ("psych", "🧩 Psychology", "psychology"),
     ("med", "🩺 Medicine", "medicine"),
+    ("fx", "💱 Forex Trading", "forex trading"),
 ]
 
 HOME_TEXT = (
@@ -118,9 +119,19 @@ def home_menu():
             left, right = [], []
     if left or right:
         rows.append(left + right)
+    rows.append([{"text": "💱 Forex Books", "callback_data": "ui:cat:fx"}])
+    rows.append([{"text": "🏷️ MQL5 EAs/Indicators", "callback_data": "mql5:menu"}])
     rows.append([{"text": "❓ How to use", "callback_data": "ui:help"}])
     rows.append([{"text": "❌ Cancel", "callback_data": "ui:cancel"}])
     return {"text": HOME_TEXT, "reply_markup": {"inline_keyboard": rows}}
+
+
+def mql5_menu():
+    from mql5_scout import MQL5_LISTINGS, MQL5_TEXT
+    rows = [[{"text": label, "callback_data": "mql5:" + key}]
+            for key, label, _market, _kind in MQL5_LISTINGS]
+    rows.append([{"text": "🏠 Home", "callback_data": "ui:home"}])
+    return {"text": MQL5_TEXT, "reply_markup": {"inline_keyboard": rows}}
 
 
 def category_topic(key):

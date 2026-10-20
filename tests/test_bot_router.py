@@ -225,6 +225,76 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
                                 search_provider=self.provider(seen=seen))
         self.assertEqual(seen, ["quantum computing"])
 
+    # ---- MQL5 trending callbacks -----------------------------------------
+    async def test_mql5_menu_shows_listings(self):
+        update = self.callback("mql5:menu")
+        await handle_update(update, MagicMock(), store=self.store)
+        text = update.callback_query.edit_message_text.await_args.args[0]
+        self.assertIn("MQL5 Code Base", text)
+
+    async def test_mql5_listing_scrapes_and_pages(self):
+        items = [{"id": "78579", "title": "Prop Firm Guard",
+                  "url": "https://www.mql5.com/en/code/78579"}]
+        with patch("bot_router.scrape_trending", return_value=items) as st:
+            update = self.callback("mql5:mt5:ea")
+            await handle_update(update, MagicMock(), store=self.store)
+        st.assert_called_once_with("mt5", "experts")
+        state, data = self.store.get_session(12345)
+        self.assertEqual(state, "MQL5_LISTING")
+        self.assertEqual(data["items"], items)
+        text = update.callback_query.edit_message_text.await_args.args[0]
+        self.assertIn("Prop Firm Guard", text)
+
+    async def test_mql5_listing_failure_shows_warning(self):
+        with patch("bot_router.scrape_trending", side_effect=ValueError("boom")):
+            update = self.callback("mql5:mt5:ea")
+            await handle_update(update, MagicMock(), store=self.store)
+        call = update.callback_query.edit_message_text.await_args
+        self.assertIn("Couldn't load", call.args[0])
+
+    async def test_mql5_page_navigation(self):
+        items = [{"id": str(1000 + i), "title": "EA " + str(i),
+                  "url": "https://x"} for i in range(10)]
+        self.store.set_session(12345, "MQL5_LISTING",
+                               {"market": "mt5", "kind": "experts",
+                                "items": items, "page": 0})
+        update = self.callback("mql5s:1")
+        await handle_update(update, MagicMock(), store=self.store)
+        self.assertEqual(self.store.get_session(12345)[1]["page"], 1)
+        update.callback_query.edit_message_text.assert_awaited()
+
+    async def test_mql5_item_delivery(self):
+        items = [{"id": "78579", "title": "Prop Firm Guard",
+                  "url": "https://www.mql5.com/en/code/78579"}]
+        self.store.set_session(12345, "MQL5_LISTING",
+                               {"market": "mt5", "kind": "experts",
+                                "items": items, "page": 0})
+        update = self.callback("dlm:0")
+        with patch("bot_router.mql5_deliver_file",
+                   return_value=("source", "https://x/A.mq5", 2000)):
+            await handle_update(update, MagicMock(), store=self.store)
+        sent = update.callback_query.message.reply_text.await_args.args[0]
+        self.assertIn("✅ Sent", sent)
+        self.assertIn("Prop Firm Guard", sent)
+
+    async def test_mql5_item_delivery_failure_link_fallback(self):
+        items = [{"id": "78579", "title": "Prop Firm Guard",
+                  "url": "https://www.mql5.com/en/code/78579"}]
+        self.store.set_session(12345, "MQL5_LISTING",
+                               {"market": "mt5", "kind": "experts",
+                                "items": items, "page": 0})
+        update = self.callback("dlm:0")
+        with patch("bot_router.mql5_deliver_file", side_effect=ValueError("big")):
+            await handle_update(update, MagicMock(), store=self.store)
+        sent = update.callback_query.message.reply_text.await_args.args[0]
+        self.assertIn("https://www.mql5.com/en/code/78579", sent)
+
+    async def test_mql5_expired_listing_rejected(self):
+        self.store.set_session(12345, "MENU", {})
+        update = self.callback("dlm:0")
+        await handle_update(update, MagicMock(), store=self.store)
+        update.callback_query.message.reply_text.assert_not_awaited()
+
     # ---- filler helpers (from PR #11) -------------------------------------
     def test_clean_query_strips_filler(self):
         self.assertEqual(_clean_query("Search ebook bbma"), "bbma")
