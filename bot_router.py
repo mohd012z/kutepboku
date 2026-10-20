@@ -17,9 +17,10 @@ import requests
 from session_manager import SessionManager
 from search_pagination import (build_search_keyboard, new_search_session,
                                process_search_callback)
-from ai_assistant import (HELP_TEXT, _chat_reply, ask_intent, auto_menu,
-                          category_topic, deliver_file, delivery_keyboard,
-                          home_menu, mql5_menu)
+from ai_assistant import (BOT_COMMANDS, HELP_TEXT, _chat_reply, ask_intent,
+                          auto_menu, category_topic, command_action,
+                          deliver_file, delivery_keyboard, home_menu,
+                          mql5_menu)
 from mql5_scout import (MQL5_LISTINGS, mql5_item_by_index, mql5_paged_message,
                         scrape_trending)
 from mql5_scout import deliver_file as mql5_deliver_file
@@ -138,6 +139,40 @@ async def _run_action(action, user_id, store, message, intent_result, raw_text):
             await message.reply_text(reply)
         return True
     return False
+
+
+async def _run_command(action, user_id, store, message, search_provider):
+    """Dispatch a BOT_COMMANDS action string (see ai_assistant.BOT_COMMANDS)."""
+    if action == "home":
+        store.set_session(user_id, "MENU", {})
+        menu = home_menu()
+        await message.reply_text(menu["text"], reply_markup=menu["reply_markup"])
+        return
+    if action == "help":
+        await message.reply_text(HELP_TEXT)
+        return
+    if action == "cancel":
+        store.clear_session(user_id)
+        await message.reply_text("Cancelled.")
+        return
+    if action == "admin":
+        # /status + /backup are handled by main.py's CommandHandlers; if this
+        # is reached the user is not the configured admin.
+        await message.reply_text("Admin-only command (status/backup).")
+        return
+    if action.startswith("search:"):
+        topic = action.split(":", 1)[1]
+        await _search_and_present(message, user_id, topic, store,
+                                  search_provider)
+        return
+    if action == "mql5_menu":
+        menu = mql5_menu()
+        await message.reply_text(menu["text"], reply_markup=menu["reply_markup"])
+        return
+    if action == "auto_menu":
+        menu = auto_menu()
+        await message.reply_text(menu["text"], reply_markup=menu["reply_markup"])
+        return
 
 
 async def _send_repo_zip(update, user_id, store, item):
@@ -377,6 +412,22 @@ async def handle_update(update, context, *, search_provider=None, store=None):
         return
 
     state, _sdata = store.get_session(user_id)
+
+    # ---- bot commands (bottom-left ⋮ menu) --------------------------------
+    # Anything listed in BOT_COMMANDS is dispatched here; the LLM never sees
+    # it. /status and /backup are served by main.py's CommandHandlers
+    # (admin-only diagnostics) and don't reach the router.
+    if text.startswith("/"):
+        first = text.split()[0] if text.split() else ""
+        name = first[1:].split("@")[0].lower()  # strip "/" and "@botname"
+        action = command_action(name)
+        if action is not None:
+            if state in ("SELECTING_BOOK", "CHOOSE_DELIVERY",
+                         "MQL5_LISTING", "AUTO_LISTING"):
+                store.clear_session(user_id)
+            await _run_command(action, user_id, store, message,
+                               search_provider)
+            return
 
     if text in ("/start", "/menu", "/home"):
         store.set_session(user_id, "MENU", {})

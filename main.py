@@ -86,6 +86,14 @@ async def verify_identity(application):
     if not me.is_bot or (me.username or "").lower() != BOT_NAME:
         raise RuntimeError("Telegram bot identity mismatch")
     log.info("Verified bot @%s", me.username)
+    # Publish the command menu (the bottom-left ⋮ shortcut in chat).
+    from ai_assistant import bot_command_markup
+    try:
+        await application.bot.set_my_commands(bot_command_markup())
+        log.info("Registered %d commands in the Telegram command menu",
+                 len(bot_command_markup()))
+    except Exception:
+        log.exception("set_my_commands failed (menu falls back to /help)")
 
 
 async def manual_backup_command(update, context):

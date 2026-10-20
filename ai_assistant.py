@@ -47,8 +47,46 @@ HELP_TEXT = (
     "• Or type any request — I understand plain language.\n"
     "• Pick a book from the list, then choose Send file (I download and "
     "send it) or Link (I send the archive.org link).\n"
-    "• Commands: /start (menu), /cancel, /status (admin), /backup (admin)."
-)
+    "• Bottom-left ⋮ menu = quick commands (see /help).\n"
+    "\nCommands:\n"
+    "/start — main menu\n"
+    "/forex — forex trading books (CC)\n"
+    "/hacking — hacking automation books\n"
+    "/android — android automation books\n"
+    "/mql5 — trending EAs & indicators (MQL5)\n"
+    "/tools — automation tools (hacking + Android)\n"
+    "/help — this help\n"
+    "/cancel — stop current action\n"
+    "/status — admin diagnostics")
+
+# (command, description, action). Single source of truth for the Telegram
+# command menu (setMyCommands — the bottom-left ⋮ menu) and router dispatch.
+BOT_COMMANDS = [
+    ("start", "Open the main menu", "home"),
+    ("forex", "Forex trading books (CC)", "search:forex trading"),
+    ("hacking", "Hacking automation books",
+     "search:hacking penetration testing automation"),
+    ("android", "Android automation books", "search:android automation"),
+    ("mql5", "Trending EAs & indicators (MQL5)", "mql5_menu"),
+    ("tools", "Automation tools (hacking + Android)", "auto_menu"),
+    ("help", "Instructions & how to use", "help"),
+    ("cancel", "Stop the current action", "cancel"),
+    ("status", "Admin diagnostics (admin only)", "admin"),
+]
+
+
+def bot_command_markup():
+    """Payload for Bot API setMyCommands."""
+    return [{"command": command, "description": description}
+            for command, description, _action in BOT_COMMANDS]
+
+
+def command_action(name):
+    """Action string for a command name, or None if not a bot command."""
+    for command, _description, action in BOT_COMMANDS:
+        if command == name:
+            return action
+    return None
 
 _INTENT_PROMPT = (
     "You are the intent parser of an eBook assistant. "

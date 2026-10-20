@@ -365,6 +365,62 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         await handle_update(update, MagicMock(), store=self.store)
         update.callback_query.message.reply_text.assert_not_awaited()
 
+    # ---- bot commands (bottom-left ⋮ menu) --------------------------------
+    async def test_command_forex_searches(self):
+        seen = []
+        update = self.message("/forex")
+        await handle_update(update, MagicMock(), store=self.store,
+                            search_provider=self.provider(seen=seen))
+        self.assertEqual(seen, ["forex trading"])
+
+    async def test_command_hacking_searches(self):
+        seen = []
+        update = self.message("/hacking")
+        await handle_update(update, MagicMock(), store=self.store,
+                            search_provider=self.provider(seen=seen))
+        self.assertEqual(seen, ["hacking penetration testing automation"])
+
+    async def test_command_android_searches(self):
+        seen = []
+        update = self.message("/android")
+        await handle_update(update, MagicMock(), store=self.store,
+                            search_provider=self.provider(seen=seen))
+        self.assertEqual(seen, ["android automation"])
+
+    async def test_command_mql5_shows_menu(self):
+        update = self.message("/mql5")
+        await handle_update(update, MagicMock(), store=self.store)
+        self.assertIn("MQL5 Code Base", update.message.reply_text.await_args.args[0])
+
+    async def test_command_tools_shows_menu(self):
+        update = self.message("/tools")
+        await handle_update(update, MagicMock(), store=self.store)
+        self.assertIn("Automation tools", update.message.reply_text.await_args.args[0])
+
+    async def test_command_with_bot_suffix(self):
+        seen = []
+        update = self.message("/forex@mysoupsearchbot")
+        await handle_update(update, MagicMock(), store=self.store,
+                            search_provider=self.provider(seen=seen))
+        self.assertEqual(seen, ["forex trading"])
+
+    async def test_unlisted_slash_goes_to_search(self):
+        # "/foo" is not a bot command -> treated as a topic search
+        seen = []
+        update = self.message("/foo")
+        await handle_update(update, MagicMock(), store=self.store,
+                            search_provider=self.provider(seen=seen))
+        self.assertEqual(seen, ["/foo"])
+
+    def test_bot_command_markup_shape(self):
+        from ai_assistant import bot_command_markup
+        commands = bot_command_markup()
+        self.assertEqual(len(commands), 9)
+        self.assertEqual(commands[0]["command"], "start")
+        for entry in commands:
+            self.assertTrue(entry["description"])
+            self.assertLessEqual(len(entry["description"]), 256)
+
     # ---- filler helpers (from PR #11) -------------------------------------
     def test_clean_query_strips_filler(self):
         self.assertEqual(_clean_query("Search ebook bbma"), "bbma")
