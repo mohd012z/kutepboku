@@ -21,7 +21,7 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q .
       - name: Run offline unit tests with coverage
-        run: coverage run --source=. --omit='*/tests/*,*/test_*.py' -m unittest discover -s tests -v
+        run: coverage run --branch --source=. --omit='*/tests/*,*/test_*.py' -m unittest discover -s tests -v
       - name: Coverage summary and reports
         if: always()
         run: |
