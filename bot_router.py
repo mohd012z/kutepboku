@@ -1,4 +1,4 @@
-"""Async Telegram update router: ai_msa conversational eBook assistant.
+"""Async Telegram update router: msasoup conversational eBook assistant.
 
 Flow:
   /start or Home button -> category menu (buttons)

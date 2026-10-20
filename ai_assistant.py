@@ -1,4 +1,4 @@
-"""ai_msa conversational assistant layer: intent understanding, category menu,
+"""msasoup conversational assistant layer: intent understanding, category menu,
 and Telegram file delivery for open-licensed eBooks.
 
 Design (fail-closed on rights, fail-open to search on LLM):
@@ -34,7 +34,7 @@ CATEGORIES = [
 ]
 
 HOME_TEXT = (
-    "🤖 ai_msa — open-license eBook agent\n\n"
+    "🤖 msasoup — open-license eBook agent\n\n"
     "Pick a category or just tell me what you need, e.g. "
     "\"find a quantum computing book\". I search Internet Archive, "
     "keep only open-licensed (CC) books, and can send the file straight to you."
@@ -140,7 +140,7 @@ def delivery_keyboard():
 
 def _chat_reply(intent_result, raw_text):
     if intent_result and intent_result["intent"] == "chat":
-        return ("I'm ai_msa — I find open-licensed eBooks. Tell me a topic "
+        return ("I'm msasoup — I find open-licensed eBooks. Tell me a topic "
                 "(e.g. \"quantum computing\") or tap a category above. "
                 "Use ❓ How to use for details.")
     return None

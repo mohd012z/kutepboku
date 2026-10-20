@@ -60,7 +60,7 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         await handle_update(update, MagicMock(), store=self.store)
         self.assertEqual(self.store.get_session(12345)[0], "MENU")
         call = update.message.reply_text.await_args
-        self.assertIn("ai_msa", call.args[0])
+        self.assertIn("msasoup", call.args[0])
         markup = call.kwargs["reply_markup"]
         data = [btn["callback_data"] for row in markup["inline_keyboard"]
                 for btn in row]
@@ -141,7 +141,7 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         update = self.callback("ui:home")
         await handle_update(update, MagicMock(), store=self.store)
         text = update.callback_query.edit_message_text.await_args.args[0]
-        self.assertIn("ai_msa", text)
+        self.assertIn("msasoup", text)
 
     async def test_link_delivery_sends_url(self):
         self.store.set_session(12345, "CHOOSE_DELIVERY", {"book": dict(BOOK)})
