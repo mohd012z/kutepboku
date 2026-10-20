@@ -149,7 +149,7 @@ def run():
                 delivered.add(digest)
                 state.parent.mkdir(parents=True, exist_ok=True)
                 state.write_text(json.dumps(sorted(delivered), indent=2) + "\n")
-                print("Delivered:", book.get("title", "Open eBook"))
+                print("Licensed document delivered")
                 return
     print("No new licensed document found")
 
