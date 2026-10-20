@@ -119,8 +119,8 @@ def home_menu():
             left, right = [], []
     if left or right:
         rows.append(left + right)
-    rows.append([{"text": "💱 Forex Books", "callback_data": "ui:cat:fx"}])
     rows.append([{"text": "🏷️ MQL5 EAs/Indicators", "callback_data": "mql5:menu"}])
+    rows.append([{"text": "🛠️ Automation Tools", "callback_data": "auto:menu"}])
     rows.append([{"text": "❓ How to use", "callback_data": "ui:help"}])
     rows.append([{"text": "❌ Cancel", "callback_data": "ui:cancel"}])
     return {"text": HOME_TEXT, "reply_markup": {"inline_keyboard": rows}}
@@ -132,6 +132,17 @@ def mql5_menu():
             for key, label, _market, _kind in MQL5_LISTINGS]
     rows.append([{"text": "🏠 Home", "callback_data": "ui:home"}])
     return {"text": MQL5_TEXT, "reply_markup": {"inline_keyboard": rows}}
+
+
+def auto_menu():
+    from auto_scout import AUTO_TOOLS, AUTO_TEXT
+    rows = [[{"text": "🔥 Trending on GitHub (right now)", "callback_data": "auto:trend"}]]
+    rows.append([{"text": "🕵️ Hacking Books", "callback_data": "ui:cat:hack"}])
+    rows.append([{"text": "🤖 Android Books", "callback_data": "ui:cat:android"}])
+    for key, label, _repo in AUTO_TOOLS:
+        rows.append([{"text": label[:60], "callback_data": "auto:tool:" + key}])
+    rows.append([{"text": "🏠 Home", "callback_data": "ui:home"}])
+    return {"text": AUTO_TEXT, "reply_markup": {"inline_keyboard": rows}}
 
 
 def category_topic(key):

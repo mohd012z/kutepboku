@@ -17,11 +17,14 @@ import requests
 from session_manager import SessionManager
 from search_pagination import (build_search_keyboard, new_search_session,
                                process_search_callback)
-from ai_assistant import (HELP_TEXT, _chat_reply, ask_intent, category_topic,
-                          deliver_file, delivery_keyboard, home_menu, mql5_menu)
+from ai_assistant import (HELP_TEXT, _chat_reply, ask_intent, auto_menu,
+                          category_topic, deliver_file, delivery_keyboard,
+                          home_menu, mql5_menu)
 from mql5_scout import (MQL5_LISTINGS, mql5_item_by_index, mql5_paged_message,
                         scrape_trending)
 from mql5_scout import deliver_file as mql5_deliver_file
+from auto_scout import (_TOOL_LOOKUP, _default_branch, deliver_zip,
+                        trending_repos)
 
 # callback key ("mt5:ea") -> (market, kind)
 _MQL5_LOOKUP = {key: (market, kind) for key, _label, market, kind in MQL5_LISTINGS}
@@ -135,6 +138,33 @@ async def _run_action(action, user_id, store, message, intent_result, raw_text):
             await message.reply_text(reply)
         return True
     return False
+
+
+async def _send_repo_zip(update, user_id, store, item):
+    """Resolve branch, download the repo zip, sendDocument; >20 MB or any
+    failure falls back to the repo link. `item` needs id/title/url."""
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    chat_id = str(os.getenv("TELEGRAM_DELIVERY_CHAT_ID") or user_id)
+    message = update.callback_query.message
+    await update.callback_query.answer("⏳ Resolving + downloading…")
+    repo = {**item}
+    try:
+        repo["branch"] = await asyncio.to_thread(_default_branch, item["id"])
+        size, _ = await asyncio.to_thread(
+            deliver_zip, token, chat_id, repo, session=requests)
+    except ValueError as err:
+        if message is not None:
+            await message.reply_text("🔗 " + item["id"] + " — " + str(err)
+                                     + ":\n" + item["url"])
+        return
+    except Exception:
+        if message is not None:
+            await message.reply_text("⚠️ Download failed — repo link instead:\n"
+                                     + item["url"])
+        return
+    if message is not None:
+        await message.reply_text("✅ Sent " + item["id"] + " ("
+                                 + str(round(size / 1024)) + " KB)\n" + item["url"])
 
 
 async def handle_update(update, context, *, search_provider=None, store=None):
@@ -261,6 +291,57 @@ async def handle_update(update, context, *, search_provider=None, store=None):
                 await message.reply_text(
                     "✅ Sent " + item["title"][:80] + " (" + kind + ", "
                     + str(round(size / 1024)) + " KB)\n" + item["url"])
+            return
+        if data.startswith("auto:"):
+            action = data[5:]
+            if action == "menu":
+                menu = auto_menu()
+                await callback.edit_message_text(menu["text"],
+                                                 reply_markup=menu["reply_markup"])
+                return
+            if action == "trend":
+                await callback.answer("🔥 Loading GitHub trending…")
+                try:
+                    items = await asyncio.to_thread(trending_repos)
+                except Exception:
+                    await callback.edit_message_text(
+                        "⚠️ Couldn't load GitHub trending right now "
+                        "(site busy or layout changed). Try again in a minute.")
+                    return
+                store.set_session(user_id, "AUTO_LISTING", {"items": items})
+                rows = [[{"text": it["title"][:60],
+                          "callback_data": "autl:" + str(i)}]
+                        for i, it in enumerate(items[:5])]
+                rows.append([{"text": "🏠 Home", "callback_data": "ui:home"}])
+                await callback.edit_message_text(
+                    "🔥 Trending on GitHub right now — tap a repo to get "
+                    "the source zip (link-only if >20 MB):",
+                    reply_markup={"inline_keyboard": rows})
+                return
+            if action.startswith("tool:"):
+                key = action[5:]
+                label, full = _TOOL_LOOKUP.get(key, (None, None))
+                if full is None:
+                    await callback.answer("Unknown tool.", show_alert=True)
+                    return
+                await _send_repo_zip(update, user_id, store, {
+                    "id": full, "title": label,
+                    "url": "https://github.com/" + full})
+                return
+        if data.startswith("autl:"):
+            state, sdata = store.get_session(user_id)
+            items = sdata.get("items") if isinstance(sdata, dict) else None
+            if state != "AUTO_LISTING" or not isinstance(items, list):
+                await callback.answer("This listing has expired.", show_alert=True)
+                return
+            try:
+                index = int(data[5:])
+                if index < 0 or index >= len(items):
+                    raise ValueError("bad index")
+            except ValueError:
+                await callback.answer("Bad item.", show_alert=True)
+                return
+            await _send_repo_zip(update, user_id, store, items[index])
             return
         if data.startswith("ui:"):
             action = data[3:]

@@ -295,6 +295,76 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         await handle_update(update, MagicMock(), store=self.store)
         update.callback_query.message.reply_text.assert_not_awaited()
 
+    # ---- automation tools callbacks --------------------------------------
+    async def test_auto_menu_shows_tools(self):
+        update = self.callback("auto:menu")
+        await handle_update(update, MagicMock(), store=self.store)
+        text = update.callback_query.edit_message_text.await_args.args[0]
+        self.assertIn("Automation tools", text)
+        markup = update.callback_query.edit_message_text.await_args.kwargs["reply_markup"]
+        data = [btn["callback_data"] for row in markup["inline_keyboard"] for btn in row]
+        self.assertIn("auto:trend", data)
+        self.assertIn("auto:tool:nuclei", data)
+        self.assertIn("auto:tool:uia2", data)
+
+    async def test_auto_trending_lists_repos(self):
+        items = [{"id": "owner/repo", "title": "owner/repo",
+                  "url": "https://github.com/owner/repo"}]
+        with patch("bot_router.trending_repos", return_value=items):
+            update = self.callback("auto:trend")
+            await handle_update(update, MagicMock(), store=self.store)
+        self.assertEqual(self.store.get_session(12345)[0], "AUTO_LISTING")
+        call = update.callback_query.edit_message_text.await_args
+        markup = call.kwargs["reply_markup"]
+        data = [btn["callback_data"] for row in markup["inline_keyboard"]
+                for btn in row]
+        self.assertIn("autl:0", data)
+        # repo name shown in a button
+        self.assertTrue(any("owner/repo" in btn["text"]
+                            for row in markup["inline_keyboard"] for btn in row))
+
+    async def test_auto_trending_failure_warns(self):
+        with patch("bot_router.trending_repos", side_effect=ValueError("x")):
+            update = self.callback("auto:trend")
+            await handle_update(update, MagicMock(), store=self.store)
+        text = update.callback_query.edit_message_text.await_args.args[0]
+        self.assertIn("Couldn't load GitHub trending", text)
+
+    async def test_auto_tool_delivers_zip(self):
+        update = self.callback("auto:tool:katana")
+        with patch("bot_router._default_branch", return_value="dev"), \
+             patch("bot_router.deliver_zip", return_value=(4000, "https://x")):
+            await handle_update(update, MagicMock(), store=self.store)
+        sent = update.callback_query.message.reply_text.await_args.args[0]
+        self.assertIn("✅ Sent projectdiscovery/katana", sent)
+
+    async def test_auto_tool_too_large_gives_link(self):
+        update = self.callback("auto:tool:metasploit")
+        with patch("bot_router._default_branch", return_value="master"), \
+             patch("bot_router.deliver_zip",
+                   side_effect=ValueError("Repo exceeds the 20 MB bot-file limit — link only")):
+            await handle_update(update, MagicMock(), store=self.store)
+        sent = update.callback_query.message.reply_text.await_args.args[0]
+        self.assertIn("https://github.com/rapid7/metasploit-framework", sent)
+        self.assertIn("🔗", sent)
+
+    async def test_auto_trending_item_delivers(self):
+        items = [{"id": "owner/repo", "title": "owner/repo",
+                  "url": "https://github.com/owner/repo"}]
+        self.store.set_session(12345, "AUTO_LISTING", {"items": items})
+        update = self.callback("autl:0")
+        with patch("bot_router._default_branch", return_value="main"), \
+             patch("bot_router.deliver_zip", return_value=(2000, "https://x")):
+            await handle_update(update, MagicMock(), store=self.store)
+        sent = update.callback_query.message.reply_text.await_args.args[0]
+        self.assertIn("✅ Sent owner/repo", sent)
+
+    async def test_auto_trending_item_expired(self):
+        self.store.set_session(12345, "MENU", {})
+        update = self.callback("autl:0")
+        await handle_update(update, MagicMock(), store=self.store)
+        update.callback_query.message.reply_text.assert_not_awaited()
+
     # ---- filler helpers (from PR #11) -------------------------------------
     def test_clean_query_strips_filler(self):
         self.assertEqual(_clean_query("Search ebook bbma"), "bbma")
