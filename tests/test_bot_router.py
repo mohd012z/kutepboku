@@ -456,13 +456,14 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(text, TERMUX_MENU_TEXT)
         kb = update.message.reply_text.await_args.kwargs["reply_markup"]
         data = [b["callback_data"] for row in kb["inline_keyboard"] for b in row]
-        self.assertEqual(len(kb["inline_keyboard"]), 12)
+        self.assertEqual(len(kb["inline_keyboard"]), 13)
         self.assertIn("termux:pkg", data)
         self.assertIn("fa:run:termux", data)   # chat-automation tools
         self.assertIn("fa:run:termuxre", data)  # Termux RE (r2/jadx/apktool)
         self.assertIn("termux:ghidra", data)    # Termux + Ghidra
         self.assertIn("termux:radare2", data)   # Termux + radare2
         self.assertIn("termux:frida", data)     # Termux + Frida
+        self.assertIn("termux:hbctool", data)   # Termux + hbctool
         self.assertIn("fa:run:reverse", data)   # related RE tools
         self.assertIn("fa:run:cloning", data)   # related cloning tools
         self.assertIn("termux:books", data)
@@ -470,7 +471,8 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
     async def test_termux_re_howto_buttons(self):
         for action, marker in (("ghidra", "ghidraRun"),
                                ("radare2", "pkg install radare2"),
-                               ("frida", "frida-server")):
+                               ("frida", "frida-server"),
+                               ("hbctool", "hbctool disasm")):
             with self.subTest(action=action):
                 update = self.callback(f"termux:{action}")
                 await handle_update(update, MagicMock(), store=self.store)

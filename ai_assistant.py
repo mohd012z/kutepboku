@@ -294,6 +294,7 @@ def termux_menu():
         [{"text": "🧩 Termux + Ghidra (openjdk-21)", "callback_data": "termux:ghidra"}],
         [{"text": "🐚 Termux + radare2 (pkg install radare2)", "callback_data": "termux:radare2"}],
         [{"text": "🪝 Termux + Frida (frida-server)", "callback_data": "termux:frida"}],
+        [{"text": "📦 Termux + hbctool (Hermes bytecode)", "callback_data": "termux:hbctool"}],
         [{"text": "🔬 Reverse Engineering apk (tools)", "callback_data": "fa:run:reverse"}],
         [{"text": "🪞 Web & App Cloning (tools)", "callback_data": "fa:run:cloning"}],
         [{"text": "🕵️ Hacking & Pen-Test (tools)", "callback_data": "fa:run:hacking"}],

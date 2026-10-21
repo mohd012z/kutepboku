@@ -78,6 +78,24 @@ _TERMUX_RE_INFO = {
         "On the same phone: skip adb, run frida-server in one Termux tab, "
         "frida tools in another. Root (magisk) or an app you own for "
         "spawning; non-root can attach to unhardened apps."),
+    "hbctool": (
+        "📦 hbctool in Termux — assemble/disassemble Hermes bytecode "
+        "(React Native)\n\n"
+        "pip install hbctool   (or: pip install <the>.whl)\n"
+        "# 1) pull the RN bundle out of the APK:\n"
+        "apktool d app.apk\n"
+        "cp app.apk/assets/index.android.bundle .\n"
+        "# 2) disassemble -> metadata.json + string.json + instruction.hasm\n"
+        "hbctool disasm index.android.bundle hasm_dir\n"
+        "# 3) patch strings / register operands in the .hasm, then reassemble\n"
+        "hbctool asm hasm_dir index.android.bundle\n\n"
+        "Supports HBC versions 59-96 (this build), magic "
+        "0x1F1903C103BC1FC6. Verified: disasm->patch->asm->reload OK.\n"
+        "Limits: patched strings/instructions may not grow past the "
+        "original length (overflow patching not supported yet).\n"
+        "Caveat: .hasm text drops the decorative string-lookup comments "
+        "(; Oper[i]: String(id) '...') — operand VALUES round-trip fine "
+        "(verified); edit by number, check string.json for the text."),
 }
 
 db = None
@@ -710,12 +728,8 @@ async def handle_update(update, context, *, search_provider=None, store=None):
                                           "termux android automation",
                                           store, search_provider)
                 return
-            if action in ("ghidra", "radare2", "frida"):
-                info = _TERMUX_RE_INFO.get(action)
-                if info is None:
-                    await callback.answer("Unknown termux action.",
-                                          show_alert=True)
-                    return
+            if action in _TERMUX_RE_INFO:
+                info = _TERMUX_RE_INFO[action]
                 await callback.edit_message_text(
                     info + "\n\n🔬 Related: tap “Termux RE” for the full "
                     "tool list (Ghidra, jadx, apktool, radare2, Frida).",
