@@ -20,3 +20,6 @@ logs/archives/*.zip
 .vscode/
 .idea/
 msasoup.env
+
+# runtime agent state (written by the live process)
+state/
