@@ -77,6 +77,10 @@ AI_TOPICS = [
      "`frida -U`.\n"
      "• Ghidra: `pkg install openjdk-21 unzip`, download the Ghidra zip "
      "from GitHub, run `./ghidraRun` (Java app; needs X11 for the GUI).\n"
+     "• Flutter/Dart AOT: clone worawit/blutter + `python3 blutter.py "
+     "<arm64 dir> <out>` (builds a C++ reader → pp.txt pool map + Dart); "
+     "PPTool (Kirlif, GitHub wheel → `pip install pptool-2.0-…whl`) finds "
+     "the load address of any pool object. (Both in the tool list below.)\n"
      "• `pkg install gdb strace` → low-level tracing. Tap a tool → zip."),
     ("tginfo", "🔎 Telegram Username Check", "telegram user info mtproto",
      "telegram bots chat",
@@ -205,7 +209,7 @@ CURATED_AI_REPOS = {
         ("iBotPeaches/Apktool", "APK decompile + recompile (Termux: pkg install apktool)", 26435),
         ("radareorg/radare2", "radare2 — UNIX-like RE framework (Termux: pkg install radare2)", 25114),
         ("frida/frida", "Frida — runtime instrumentation (Termux: frida-server + pip frida-tools)", 22402),
-        ("worawit/blutter", "blutter — Flutter/Dart AOT decompiler (reads libapp.so → pp.txt + decompiled Dart)", 2771),
+        ("worawit/blutter", "blutter — Flutter/Dart AOT decompiler (libapp.so → pp.txt + Dart)", 2771),
         ("Kirlif/PPTool", "PPTool — find Dart object load addresses in libapp.so by pool-pointer offset", 17),
     ],
     "tginfo": [
@@ -258,7 +262,8 @@ def _app(full, desc, stars):
 
 
 def curated_apps(key):
-    """Bundled top repos for an AI sub-topic (offline-available)."""
+    """Bundled top repos for an AI sub-topic (offline-available). Ordered by
+    stars (desc) for display; live GitHub results are merged underneath."""
     repos = sorted(CURATED_AI_REPOS.get(key, ()), key=lambda r: -r[2])
     return [_app(full, desc, stars) for full, desc, stars in repos]
 
