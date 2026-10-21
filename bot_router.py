@@ -96,6 +96,22 @@ _TERMUX_RE_INFO = {
         "Caveat: .hasm text drops the decorative string-lookup comments "
         "(; Oper[i]: String(id) '...') — operand VALUES round-trip fine "
         "(verified); edit by number, check string.json for the text."),
+    "flutter": (
+        "🐦 Flutter (Dart AOT) RE in Termux — blutter + PPTool\n\n"
+        "# VIP logic in Flutter apps lives in libapp.so (Dart AOT), not\n"
+        "# smali. Workflow (grounded in Lazy_Flutter_patcher.py study):\n"
+        "pkg install python cmake ninja git unzip\n"
+        "git clone https://github.com/worawit/blutter && cd blutter\n"
+        "python3 blutter.py arm64-v8a out_dir   # first run builds C++\n"
+        "# -> out_dir/pp.txt = Object Pool map, Dart decompiled per class\n"
+        "# resolve the target object's pool offset from pp.txt, then:\n"
+        "pip install <pptool release wheel>   # Kirlif/PPTool (not on PyPI)\n"
+        "pptool libapp.so 0x<pp_off>   # -> function addresses that load it\n"
+        "# patch in r2 (pkg install radare2):\n"
+        "r2 -w libapp.so -c 's 0x<addr>; wa <insn>'\n\n"
+        "Pattern: swap a struct-field immediate (e.g. add x0,x22,0x30 -> "
+        "0x20) to read the sibling 'unlocked' member. Re-sign after patching "
+        "if you install normally (apksigner)."),
 }
 
 db = None
