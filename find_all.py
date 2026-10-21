@@ -205,6 +205,8 @@ CURATED_AI_REPOS = {
         ("iBotPeaches/Apktool", "APK decompile + recompile (Termux: pkg install apktool)", 26435),
         ("radareorg/radare2", "radare2 — UNIX-like RE framework (Termux: pkg install radare2)", 25114),
         ("frida/frida", "Frida — runtime instrumentation (Termux: frida-server + pip frida-tools)", 22402),
+        ("worawit/blutter", "blutter — Flutter/Dart AOT decompiler (reads libapp.so → pp.txt + decompiled Dart)", 2771),
+        ("Kirlif/PPTool", "PPTool — find Dart object load addresses in libapp.so by pool-pointer offset", 17),
     ],
     "tginfo": [
         ("LonamiWebs/Telethon", "Python MTProto Telegram client — fetch user id, profile, history", 12067),
