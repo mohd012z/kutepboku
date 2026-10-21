@@ -71,6 +71,10 @@ HELP_TEXT = (
     "• 📱 Termux & Chat Automation (/termux) — script an Android phone from "
     "Termux (uiautomator2, Airtest, ATX-Agent, scrcpy, Appium) — the "
     "DANA-Kaget / earning-bot pattern.\n"
+    "• 🔎 Telegram Username Check (/tginfo) — how to look up a @username's "
+    "details (id, profile, history) + scam-signal checklist.\n"
+    "• 🕸️ Download a Website (Scam Check) (/webscam) — mirror any site "
+    "offline (HTTrack, singleFile, Wayback) + red-flag checklist.\n"
     "• 🧠 Agent — I'm a built-in AI agent that studies every search and "
     "levels up; open it to see my skill level, domains learned, and strongest "
     "topics.\n"
@@ -84,6 +88,8 @@ HELP_TEXT = (
     "/hacking — hacking & pen-test: info + tools\n"
     "/reverse — reverse engineering (apk): info + tools\n"
     "/termux — Termux & chat automation: info + tools\n"
+    "/tginfo — check a Telegram username: info + tools\n"
+    "/webscam — download any website (scam check): info + tools\n"
     "/agent — my skill level & what I've learned\n"
     "/forex — forex trading books (CC)\n"
     "/android — android automation books\n"
@@ -110,6 +116,8 @@ BOT_COMMANDS = [
     ("marketing", "AI advertising & marketing agent (ebooks + apps)",
      "find:marketing"),
     ("clone", "Web & app cloning — info + top tools", "find:cloning"),
+    ("tginfo", "Check a Telegram username (details + scam signals)", "find:tginfo"),
+    ("webscam", "Download any website to check for scams", "find:webscam"),
     ("agent", "Built-in agent: skill level & what it has learned", "agent"),
     ("help", "Instructions & how to use", "help"),
     ("cancel", "Stop the current action", "cancel"),
@@ -203,11 +211,17 @@ def home_menu():
         rows.append(left + right)
     rows.append([{"text": "🏷️ MQL5 EAs/Indicators", "callback_data": "mql5:menu"}])
     rows.append([{"text": "🛠️ Automation Tools", "callback_data": "auto:menu"}])
-    rows.append([{"text": "📣 AI Marketing", "callback_data": "fa:run:marketing"}])
-    rows.append([{"text": "🪞 Web & App Cloning", "callback_data": "fa:run:cloning"}])
-    rows.append([{"text": "🕵️ Hacking & Pen-Test", "callback_data": "fa:run:hacking"}])
-    rows.append([{"text": "🔬 Reverse Engineering (apk)", "callback_data": "fa:run:reverse"}])
-    rows.append([{"text": "📱 Termux & Chat Automation", "callback_data": "fa:run:termux"}])
+    rows.append([
+        {"text": "📣 AI Marketing", "callback_data": "fa:run:marketing"},
+        {"text": "🪞 Web & App Cloning", "callback_data": "fa:run:cloning"}])
+    rows.append([
+        {"text": "🕵️ Hacking & Pen-Test", "callback_data": "fa:run:hacking"},
+        {"text": "🔬 Reverse Engineering", "callback_data": "fa:run:reverse"}])
+    rows.append([
+        {"text": "📱 Termux & Chat Auto", "callback_data": "fa:run:termux"},
+        {"text": "🔎 Telegram User Check", "callback_data": "fa:run:tginfo"}])
+    rows.append([
+        {"text": "🕸️ Download Site (Scam)", "callback_data": "fa:run:webscam"}])
     rows.append([{"text": "🪄 Prompt Forge (any AI)", "callback_data": "pf:menu"}])
     rows.append([{"text": "🧠 Agent (level & learning)", "callback_data": "ui:agent"}])
     rows.append([{"text": "❓ How to use", "callback_data": "ui:help"}])

@@ -66,6 +66,25 @@ AI_TOPICS = [
      "@Termuxzts (Script Termux): DANA-Kaget auto-claim, 'penghasil coin "
      "crypto' bots (BTC/Doge/PePe via Telegram bots), withdraw-to-DANA, "
      "CapCut Pro events, free AI API keys (Xiaomi MiMo, Freebuff)."),
+    ("tginfo", "🔎 Telegram Username Check", "telegram user info mtproto",
+     "telegram bots chat",
+     "Check a Telegram @username: (1) profile — open the @name; a real "
+     "account/bot shows name, avatar, bio; bots have a verified ✓ and "
+     "/start works. (2) id & join date — an MTProto client (Telethon, "
+     "Pyrogram, MadelineProto) can fetch user_id, first/last seen and "
+     "profile via api_id/api_hash. (3) history — t.me/NAME public preview "
+     "shows channels' recent posts; check Telegram search + t.me/s/NAME. "
+     "Scam signals: account age, reused photos, copy-paste bio, mass adds."),
+    ("webscam", "🕸️ Download a Website (Scam Check)", "website mirror download",
+     "website web",
+     "Pull any site down to inspect it offline (scammer check): httrack "
+     "mirrors the whole site (Linux/Termux/Android builds), the singleFile "
+     "browser extension saves a page as one HTML, Wayback Machine archives "
+     "it. Then look for red flags: whois/registrar + registration age "
+     "(fresh domain = risk), SSL cert, real contact/phone/address, social "
+     "proof, and 'pay via WhatsApp/Telegram first' or wallet-address "
+     "payment = classic scam. Inspect the mirror offline so the site can't "
+     "change what you're reviewing."),
 ]
 
 # Hand-verified top repos per AI sub-topic (study of GitHub search, 2026-10-20).
@@ -148,6 +167,21 @@ CURATED_AI_REPOS = {
         ("openatx/uiautomator2", "Android UI automation via Python (taps/swipes by selector)", 8433),
         ("appium/appium", "Cross-platform mobile automation (iOS + Android)", 22114),
         ("openatx/ATX-Agent", "HTTP daemon running on the Android device for automation", 802),
+    ],
+    "tginfo": [
+        ("LonamiWebs/Telethon", "Python MTProto Telegram client — fetch user id, profile, history", 12067),
+        ("pyrogram/pyrogram", "Elegant async Telegram MTProto framework (user/bot)", 4620),
+        ("danog/MadelineProto", "Async PHP Telegram MTProto client (user_id, first/last seen)", 3540),
+        ("gram-js/gramjs", "Node/Browser MTProto Telegram client", 1765),
+        ("iggisv9t/tgcrawler", "Simple Telegram channel crawler (messages, members, files)", 19),
+    ],
+    "webscam": [
+        ("ScrapeGraphAI/Scrapegraph-ai", "AI-powered Python scraper (content, metadata, screenshots)", 32044),
+        ("D4Vinci/Scrapling", "Adaptive web-scraping framework (single request → structured data)", 88898),
+        ("apify/crawlee", "Crawlee — web scraping + browser automation (Node.js)", 26202),
+        ("xroche/httrack", "HTTrack Website Copier — mirror a whole site offline", 4795),
+        ("zmh-program/next-whois", "Modern Whois lookup (domain age, registrar, owner)", 592),
+        ("Moham3dRiahi/Th3inspector", "Th3Inspector — OSINT information gathering (people, domains, IPs)", 2673),
     ],
 }
 
