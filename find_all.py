@@ -62,9 +62,10 @@ AI_TOPICS = [
      "android automation uiautomator",
      "Script an Android phone from a Termux shell: uiautomator2 taps/swipes "
      "by selector, airtest matches by screenshot, ATX-Agent + scrcpy mirror "
-     "and control, Appium drives iOS+Android cross-platform. The pattern for "
-     "DANA-Kaget / CapCut / earning-game auto-claim bots shared in Termux "
-     "script channels."),
+     "and control, Appium drives iOS+Android cross-platform. Studied "
+     "@Termuxzts (Script Termux): DANA-Kaget auto-claim, 'penghasil coin "
+     "crypto' bots (BTC/Doge/PePe via Telegram bots), withdraw-to-DANA, "
+     "CapCut Pro events, free AI API keys (Xiaomi MiMo, Freebuff)."),
 ]
 
 # Hand-verified top repos per AI sub-topic (study of GitHub search, 2026-10-20).
