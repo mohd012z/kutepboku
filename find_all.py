@@ -85,6 +85,16 @@ AI_TOPICS = [
      "proof, and 'pay via WhatsApp/Telegram first' or wallet-address "
      "payment = classic scam. Inspect the mirror offline so the site can't "
      "change what you're reviewing."),
+    ("learn", "🎓 Learning & School Programs", "online learning lms spaced repetition",
+     "learning education study",
+     "Two paths: (1) LEARN A SKILL — follow a free structured curriculum "
+     "(freeCodeCamp for coding, The Odin Project, exercism for mentored "
+     "practice), lock it in with spaced repetition (Anki/AnkiDroid daily "
+     "cards), keep a notes system (Obsidian/Joplin). (2) BUILD A SCHOOL "
+     "PROGRAM — self-host a learning platform (LMS): Moodle is the most "
+     "widely used open LMS, Open edX powers edX — both give courses, "
+     "assignments, grading, certificates for a class/family/kids. Pair a "
+     "curriculum + LMS + Anki and you have a complete school."),
 ]
 
 # Hand-verified top repos per AI sub-topic (study of GitHub search, 2026-10-20).
@@ -182,6 +192,17 @@ CURATED_AI_REPOS = {
         ("xroche/httrack", "HTTrack Website Copier — mirror a whole site offline", 4795),
         ("zmh-program/next-whois", "Modern Whois lookup (domain age, registrar, owner)", 592),
         ("Moham3dRiahi/Th3inspector", "Th3Inspector — OSINT information gathering (people, domains, IPs)", 2673),
+    ],
+    "learn": [
+        ("freeCodeCamp/freeCodeCamp", "freeCodeCamp — free coding curriculum + certificates", 457598),
+        ("laurent22/joplin", "Joplin — privacy-focused note taking + sync (study notes)", 56820),
+        ("ankitects/anki", "Anki — spaced-repetition flashcards (lock in any skill)", 32160),
+        ("obsidianmd/obsidian-releases", "Obsidian — link your notes into a personal knowledge base", 22438),
+        ("ankidroid/Anki-Android", "AnkiDroid — Anki flashcards on Android (daily drills)", 12066),
+        ("openedx/openedx-platform", "Open edX — self-host a real LMS (courses, grading, certificates)", 8205),
+        ("exercism/exercism", "Exercism — mentored coding practice in 60+ languages", 7594),
+        ("moodle/moodle", "Moodle — the most widely used open-source LMS (build a school)", 7507),
+        ("TheOdinProject/theodinproject", "The Odin Project — free full-stack web development path", 4662),
     ],
 }
 

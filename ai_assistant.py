@@ -75,6 +75,9 @@ HELP_TEXT = (
     "details (id, profile, history) + scam-signal checklist.\n"
     "• 🕸️ Download a Website (Scam Check) (/webscam) — mirror any site "
     "offline (HTTrack, singleFile, Wayback) + red-flag checklist.\n"
+    "• 🎓 Learning & School Programs (/learn) — how to learn a skill "
+    "(free curricula + Anki spaced repetition + notes) and how to build a "
+    "school program (self-hosted LMS: Moodle, Open edX).\n"
     "• 🧠 Agent — I'm a built-in AI agent that studies every search and "
     "levels up; open it to see my skill level, domains learned, and strongest "
     "topics.\n"
@@ -90,6 +93,7 @@ HELP_TEXT = (
     "/termux — Termux & chat automation: info + tools\n"
     "/tginfo — check a Telegram username: info + tools\n"
     "/webscam — download any website (scam check): info + tools\n"
+    "/learn — learning skill + school programs: info + tools\n"
     "/agent — my skill level & what I've learned\n"
     "/forex — forex trading books (CC)\n"
     "/android — android automation books\n"
@@ -118,6 +122,7 @@ BOT_COMMANDS = [
     ("clone", "Web & app cloning — info + top tools", "find:cloning"),
     ("tginfo", "Check a Telegram username (details + scam signals)", "find:tginfo"),
     ("webscam", "Download any website to check for scams", "find:webscam"),
+    ("learn", "Learning skill + school programs (curricula + LMS)", "find:learn"),
     ("agent", "Built-in agent: skill level & what it has learned", "agent"),
     ("help", "Instructions & how to use", "help"),
     ("cancel", "Stop the current action", "cancel"),
@@ -221,7 +226,8 @@ def home_menu():
         {"text": "📱 Termux & Chat Auto", "callback_data": "fa:run:termux"},
         {"text": "🔎 Telegram User Check", "callback_data": "fa:run:tginfo"}])
     rows.append([
-        {"text": "🕸️ Download Site (Scam)", "callback_data": "fa:run:webscam"}])
+        {"text": "🕸️ Download Site (Scam)", "callback_data": "fa:run:webscam"},
+        {"text": "🎓 Learning & School", "callback_data": "fa:run:learn"}])
     rows.append([{"text": "🪄 Prompt Forge (any AI)", "callback_data": "pf:menu"}])
     rows.append([{"text": "🧠 Agent (level & learning)", "callback_data": "ui:agent"}])
     rows.append([{"text": "❓ How to use", "callback_data": "ui:help"}])
