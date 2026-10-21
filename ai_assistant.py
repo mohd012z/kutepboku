@@ -297,6 +297,7 @@ def termux_menu():
         [{"text": "📦 Termux + hbctool (Hermes bytecode)", "callback_data": "termux:hbctool"}],
         [{"text": "🐦 Termux + Flutter (blutter + PPTool)", "callback_data": "termux:flutter"}],
         [{"text": "🎬 Termux + yt-dlp (media downloader)", "callback_data": "termux:ytdlp"}],
+        [{"text": "💉 Termux + Data-Inject Hook (login persist)", "callback_data": "termux:datainject"}],
         [{"text": "🔬 Reverse Engineering apk (tools)", "callback_data": "fa:run:reverse"}],
         [{"text": "🪞 Web & App Cloning (tools)", "callback_data": "fa:run:cloning"}],
         [{"text": "🕵️ Hacking & Pen-Test (tools)", "callback_data": "fa:run:hacking"}],

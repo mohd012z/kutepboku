@@ -456,7 +456,7 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(text, TERMUX_MENU_TEXT)
         kb = update.message.reply_text.await_args.kwargs["reply_markup"]
         data = [b["callback_data"] for row in kb["inline_keyboard"] for b in row]
-        self.assertEqual(len(kb["inline_keyboard"]), 15)
+        self.assertEqual(len(kb["inline_keyboard"]), 16)
         self.assertIn("termux:pkg", data)
         self.assertIn("fa:run:termux", data)   # chat-automation tools
         self.assertIn("fa:run:termuxre", data)  # Termux RE (r2/jadx/apktool)
@@ -466,6 +466,7 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("termux:hbctool", data)   # Termux + hbctool
         self.assertIn("termux:flutter", data)   # Termux + Flutter (blutter)
         self.assertIn("termux:ytdlp", data)     # Termux + yt-dlp (media)
+        self.assertIn("termux:datainject", data)  # Termux + data-inject hook
         self.assertIn("fa:run:reverse", data)   # related RE tools
         self.assertIn("fa:run:cloning", data)   # related cloning tools
         self.assertIn("termux:books", data)
@@ -476,7 +477,8 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
                                ("frida", "frida-server"),
                                ("hbctool", "hbctool disasm"),
                                ("flutter", "blutter"),
-                               ("ytdlp", "pkg install python-yt-dlp ffmpeg")):
+                               ("ytdlp", "pkg install python-yt-dlp ffmpeg"),
+                               ("datainject", "Data-Inject Hook")):
             with self.subTest(action=action):
                 update = self.callback(f"termux:{action}")
                 await handle_update(update, MagicMock(), store=self.store)
