@@ -471,13 +471,14 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
     def test_bot_command_markup_shape(self):
         from ai_assistant import bot_command_markup
         commands = bot_command_markup()
-        self.assertEqual(len(commands), 13)
+        self.assertEqual(len(commands), 14)
         self.assertEqual(commands[0]["command"], "start")
         names = [c["command"] for c in commands]
         self.assertIn("find", names)
         self.assertIn("marketing", names)
         self.assertIn("agent", names)
         self.assertIn("prompt", names)
+        self.assertIn("clone", names)
         for entry in commands:
             self.assertTrue(entry["description"])
             self.assertLessEqual(len(entry["description"]), 256)

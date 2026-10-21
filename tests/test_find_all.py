@@ -129,5 +129,28 @@ class MessageKeyboardTests(unittest.TestCase):
         self.assertIn("ui:home", data)
 
 
+    def test_studied_subtopic_includes_info(self):
+        client = mock.Mock()
+        client.get.return_value = FakeResponse(_items(("x/app", "d", 3)))
+        result = find_all("website clone", key="cloning", client=client)
+        self.assertIn("info", result)
+        self.assertTrue(result["info"])  # how-cloning-works blurb
+        text = find_all_message(result)
+        self.assertIn("ℹ️", text)
+        self.assertIn("mirror the site", text)
+
+    def test_freeform_has_no_info(self):
+        client = mock.Mock()
+        client.get.return_value = FakeResponse(_items(("x/app", "d", 3)))
+        result = find_all("some random topic", client=client)
+        self.assertEqual(result.get("info", ""), "")
+        self.assertNotIn("ℹ️", find_all_message(result))
+
+    def test_cloning_curated_present(self):
+        self.assertIn("cloning", find_all_mod.CURATED_AI_REPOS)
+        self.assertTrue(any("cloner" in a[0].lower() or "clone" in a[1].lower()
+                            for a in find_all_mod.CURATED_AI_REPOS["cloning"]))
+
+
 if __name__ == "__main__":
     unittest.main()

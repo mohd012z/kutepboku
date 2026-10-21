@@ -60,6 +60,9 @@ HELP_TEXT = (
     "fabricate) and quality gates.\n"
     "• 📣 AI Marketing — a ready-made agent: AI ad/marketing ebooks + the "
     "top AI marketing / ad-automation tools.\n"
+    "• 🪞 Web & App Cloning (/clone) — how website/app cloning works + the "
+    "top cloner tools (one-command AI site-to-app, React rebuilders, Go "
+    "cloner) + related ebooks.\n"
     "• 🧠 Agent — I'm a built-in AI agent that studies every search and "
     "levels up; open it to see my skill level, domains learned, and strongest "
     "topics.\n"
@@ -69,6 +72,7 @@ HELP_TEXT = (
     "/find — Find ALL (ebooks + apps) for a topic\n"
     "/prompt — Prompt Forge (strong AI prompts for any capability)\n"
     "/marketing — AI advertising & marketing (ebooks + apps)\n"
+    "/clone — web & app cloning: info + tools\n"
     "/agent — my skill level & what I've learned\n"
     "/forex — forex trading books (CC)\n"
     "/hacking — hacking automation books\n"
@@ -94,6 +98,7 @@ BOT_COMMANDS = [
      "prompt_menu"),
     ("marketing", "AI advertising & marketing agent (ebooks + apps)",
      "find:marketing"),
+    ("clone", "Web & app cloning — info + top tools", "find:cloning"),
     ("agent", "Built-in agent: skill level & what it has learned", "agent"),
     ("help", "Instructions & how to use", "help"),
     ("cancel", "Stop the current action", "cancel"),
@@ -188,6 +193,7 @@ def home_menu():
     rows.append([{"text": "🏷️ MQL5 EAs/Indicators", "callback_data": "mql5:menu"}])
     rows.append([{"text": "🛠️ Automation Tools", "callback_data": "auto:menu"}])
     rows.append([{"text": "📣 AI Marketing", "callback_data": "fa:run:marketing"}])
+    rows.append([{"text": "🪞 Web & App Cloning", "callback_data": "fa:run:cloning"}])
     rows.append([{"text": "🪄 Prompt Forge (any AI)", "callback_data": "pf:menu"}])
     rows.append([{"text": "🧠 Agent (level & learning)", "callback_data": "ui:agent"}])
     rows.append([{"text": "❓ How to use", "callback_data": "ui:help"}])
@@ -207,7 +213,7 @@ def find_menu():
         "ebooks AND the best apps / source code together."
     )
     rows = [[{"text": "✍️ Ask for any topic", "callback_data": "fa:run"}]]
-    for key, label, _gh, _bt in AI_TOPICS:
+    for key, label, _gh, _bt, _info in AI_TOPICS:
         rows.append([{"text": label[:60], "callback_data": "fa:run:" + key}])
     rows.append([{"text": "🏠 Home", "callback_data": "ui:home"}])
     return {"text": text, "reply_markup": {"inline_keyboard": rows}}

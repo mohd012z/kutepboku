@@ -17,22 +17,35 @@ USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 APP_LIMIT = 8
 
 # Studied sub-topics of "AI agent integration + web automation".
-# (key, label, github_query, ebook_topic)
+# (key, label, github_query, ebook_topic, info)
 AI_TOPICS = [
     ("agents", "🤖 AI Agents & Frameworks", "ai agent",
-     "ai agent frameworks"),
+     "ai agent frameworks",
+     "Agent frameworks orchestrate LLMs + tools into task-doing loops."),
     ("webauto", "🕸️ Web Automation", "web automation",
-     "web automation scraping"),
+     "web automation scraping",
+     "Automate browsers (Playwright/Puppeteer/Selenium) to act on the web."),
     ("browser", "🌐 Browser Automation", "browser automation",
-     "browser automation playwright"),
+     "browser automation playwright",
+     "Drive a real headless browser for scraping, testing, agent actions."),
     ("rag", "📚 RAG & LLM Pipelines", "RAG LLM",
-     "retrieval augmented generation LLM"),
+     "retrieval augmented generation LLM",
+     "Retrieval-augmented generation: ground LLM answers in your data."),
     ("gui", "🖥️ Computer-Use / GUI Agents", "computer use agent",
-     "computer use AI agent GUI"),
+     "computer use AI agent GUI",
+     "Agents that click/type through a computer UI like a human."),
     ("orchest", "🧩 Workflow Orchestration", "AI workflow orchestration",
-     "workflow orchestration"),
+     "workflow orchestration",
+     "Chain steps/tools/agents into reliable pipelines (Airflow, Haystack)."),
     ("marketing", "📣 AI Advertising & Marketing", "ai marketing",
-     "ai marketing advertising"),
+     "ai marketing advertising",
+     "AI agents for ad creative, copy, CRO, lead-gen and campaign data."),
+    ("cloning", "🪞 Web & App Cloning", "website clone",
+     "website cloning web scraping",
+     "How it works: mirror the site (HTML/CSS/JS/assets) -> rebuild the "
+     "structure -> compare to the original. AI-agent tools do this in one "
+     "command (static or React); scrapers (Playwright/Scrapling) feed them. "
+     "Always check the site's ToS before reusing assets."),
 ]
 
 # Hand-verified top repos per AI sub-topic (study of GitHub search, 2026-10-20).
@@ -84,10 +97,17 @@ CURATED_AI_REPOS = {
         ("yi1108/printfilm", "AI short-video marketing + short-drama platform", 5595),
         ("social-media-skills/skills", "106 social-media skills for AI agents", 176),
     ],
+    "cloning": [
+        ("JCodesMore/ai-website-cloner-template", "Clone any website with one command (AI coding agents)", 37059),
+        ("firecrawl/open-lovable", "Clone + recreate any website as a modern React app in seconds", 28749),
+        ("goclone-dev/goclone", "Website cloner using Go routines", 2286),
+        ("Jane-xiaoer/claude-skill-web-clone", "Methodology for faithfully cloning any website (static/React)", 1065),
+        ("boyang-hu/website-rebuild-skill", "Agent skill: mirror, line-by-line rebuild, auto-compare", 1539),
+    ],
 }
 
-_TOPIC_LOOKUP = {key: (label, gh_query, book_topic)
-                 for key, label, gh_query, book_topic in AI_TOPICS}
+_TOPIC_LOOKUP = {key: (label, gh_query, book_topic, info)
+                 for key, label, gh_query, book_topic, info in AI_TOPICS}
 
 
 def _app(full, desc, stars):
@@ -146,13 +166,16 @@ def apps_for(key, query, *, client=requests):
 
 
 def find_all(topic, *, client=requests, ebooks=None, key=None):
-    """One combined result: open ebooks + apps/repos for a topic."""
+    """One combined result: open ebooks + apps/repos for a topic. For a
+    studied sub-topic (key) the 'info' (how-it-works) blurb is included."""
     gh_query = topic
+    info = ""
     if key in _TOPIC_LOOKUP:
         gh_query = _TOPIC_LOOKUP[key][1]
+        info = _TOPIC_LOOKUP[key][3]
     apps = apps_for(key, gh_query, client=client)
     return {"topic": str(topic)[:200], "ebooks": list(ebooks or []),
-            "apps": apps}
+            "apps": apps, "info": info}
 
 
 def find_all_message(result):
@@ -161,10 +184,14 @@ def find_all_message(result):
     lines = ["🔎 Find ALL for “" + result["topic"] + "”",
              "",
              "📚 Open ebooks: " + str(n_books),
-             "📱 Apps / source code: " + str(n_apps),
-             "",
-             "Tap an ebook → Send file / Link. Tap an app → source zip "
-             "(link-only if >20 MB)."]
+             "📱 Apps / source code: " + str(n_apps)]
+    info = str(result.get("info") or "").strip()
+    if info:
+        lines.append("")
+        lines.append("ℹ️ " + info)
+    lines.append("")
+    lines.append("Tap an ebook → Send file / Link. Tap an app → source zip "
+                 "(link-only if >20 MB).")
     if n_books == 0:
         lines.append("· No open-licensed ebooks matched (rights gate).")
     if n_apps == 0:
