@@ -60,12 +60,10 @@ AI_TOPICS = [
      "Recompile with apktool to test patched smali/dex."),
     ("termux", "📱 Termux & Chat Automation", "android ui automation",
      "android automation uiautomator",
-     "Script an Android phone from a Termux shell: uiautomator2 taps/swipes "
-     "by selector, airtest matches by screenshot, ATX-Agent + scrcpy mirror "
-     "and control, Appium drives iOS+Android cross-platform. Studied "
-     "@Termuxzts (Script Termux): DANA-Kaget auto-claim, 'penghasil coin "
-     "crypto' bots (BTC/Doge/PePe via Telegram bots), withdraw-to-DANA, "
-     "CapCut Pro events, free AI API keys (Xiaomi MiMo, Freebuff)."),
+     "Automate an Android phone from Termux: uiautomator2 taps/swipes by "
+     "selector, Airtest matches by screenshot, scrcpy mirrors+controls, "
+     "Appium drives iOS+Android, termux-api fires notifications. Full "
+     "install steps are in the Termux menu (⚙️ pkg)."),
     ("tginfo", "🔎 Telegram Username Check", "telegram user info mtproto",
      "telegram bots chat",
      "Check a Telegram @username: (1) profile — open the @name; a real "
@@ -307,10 +305,13 @@ def find_all_message(result):
         lines.append("")
         lines.append("ℹ️ " + info)
     lines.append("")
-    lines.append("Tap an ebook → Send file / Link. Tap an app → source zip "
-                 "(link-only if >20 MB).")
+    lines.append("Tap an ebook → Send file / Link. Tap an app → its source "
+                 "zip (link-only if >20 MB).")
     if n_books == 0:
-        lines.append("· No open-licensed ebooks matched (rights gate).")
+        lines.append("· No open-licensed ebooks matched — I only return "
+                     "Creative-Commons/public-domain books (rights gate), "
+                     "so tool-focused topics like this one show 0 books "
+                     "but the apps below are the real deliverable.")
     if n_apps == 0:
         lines.append("· No apps matched (GitHub search).")
     return "\n".join(lines)

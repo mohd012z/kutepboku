@@ -448,6 +448,35 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         await handle_update(update, MagicMock(), store=self.store)
         self.assertIn("MQL5 Code Base", update.message.reply_text.await_args.args[0])
 
+    async def test_command_termux_shows_menu(self):
+        from ai_assistant import TERMUX_MENU_TEXT
+        update = self.message("/termux")
+        await handle_update(update, MagicMock(), store=self.store)
+        text = update.message.reply_text.await_args.args[0]
+        self.assertEqual(text, TERMUX_MENU_TEXT)
+        kb = update.message.reply_text.await_args.kwargs["reply_markup"]
+        data = [b["callback_data"] for row in kb["inline_keyboard"] for b in row]
+        self.assertIn("termux:pkg", data)
+        self.assertIn("fa:run:termux", data)   # related chat-automation tools
+        self.assertIn("fa:run:reverse", data)  # related RE tools
+        self.assertIn("fa:run:cloning", data)  # related cloning tools
+        self.assertIn("termux:books", data)
+
+    def test_find_menu_excludes_termux(self):
+        from ai_assistant import find_menu
+        data = [b["callback_data"] for row in find_menu()["reply_markup"]["inline_keyboard"]
+                for b in row]
+        self.assertIn("fa:run:hacking", data)
+        self.assertNotIn("fa:run:termux", data)  # termux has its own menu now
+
+    def test_home_and_auto_menu_link_termux_menu(self):
+        from ai_assistant import home_menu, auto_menu
+        for menu in (home_menu(), auto_menu()):
+            data = [b["callback_data"]
+                    for row in menu["reply_markup"]["inline_keyboard"] for b in row]
+            self.assertIn("termux:menu", data)
+            self.assertNotIn("fa:run:termux", data)
+
     async def test_fa_run_key_subtopic_resolves(self):
         # Regression: fa:run:cloning used to fall through (== "run" exact
         # match) so home sub-topic buttons did nothing.

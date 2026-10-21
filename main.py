@@ -190,7 +190,7 @@ def main():
     application.add_handler(CommandHandler("status", status_command))
     application.add_handler(CommandHandler("status", status_command))
     application.add_handler(CallbackQueryHandler(telegram_handler,
-        pattern=r"^(?:sr|ui|dlm|dlb|dl|mql5s|mql5|autl|auto|fae|fap|fa|pf):"))
+        pattern=r"^(?:sr|ui|dlm|dlb|dl|termux|mql5s|mql5|autl|auto|fae|fap|fa|pf):"))
     application.add_handler(MessageHandler(filters.TEXT, telegram_handler))
     log.info("Starting polling; startup recovery is deliberately disabled")
     application.run_polling(allowed_updates=["message", "callback_query"])

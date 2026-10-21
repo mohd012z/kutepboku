@@ -89,7 +89,7 @@ HELP_TEXT = (
     "/clone — web & app cloning: info + tools\n"
     "/hacking — hacking & pen-test: info + tools\n"
     "/reverse — reverse engineering (apk): info + tools\n"
-    "/termux — Termux & chat automation: info + tools\n"
+    "/termux — Termux menu (install + chat automation + related)\n"
     "/tginfo — check a Telegram username: info + tools\n"
     "/webscam — download any website (scam check): info + tools\n"
     "/learn — learning skill + school programs: info + tools\n"
@@ -109,7 +109,7 @@ BOT_COMMANDS = [
     ("forex", "Forex trading — info + tools + books", "find:forex"),
     ("hacking", "Hacking & pen-test — info + tools", "find:hacking"),
     ("reverse", "Reverse engineering (apk) — info + tools", "find:reverse"),
-    ("termux", "Termux & chat automation — info + tools", "find:termux"),
+    ("termux", "Termux menu — install + chat automation + related", "termux_menu"),
     ("android", "Android automation books", "search:android automation"),
     ("mql5", "Trending EAs & indicators (MQL5)", "mql5_menu"),
     ("tools", "Automation tools (hacking + Android)", "auto_menu"),
@@ -222,7 +222,7 @@ def home_menu():
         {"text": "🕵️ Hacking & Pen-Test", "callback_data": "fa:run:hacking"},
         {"text": "🔬 Reverse Engineering", "callback_data": "fa:run:reverse"}])
     rows.append([
-        {"text": "📱 Termux & Chat Auto", "callback_data": "fa:run:termux"},
+        {"text": "📱 Termux (menu)", "callback_data": "termux:menu"},
         {"text": "🔎 Telegram User Check", "callback_data": "fa:run:tginfo"}])
     rows.append([
         {"text": "🕸️ Download Site (Scam)", "callback_data": "fa:run:webscam"},
@@ -249,6 +249,8 @@ def find_menu():
     )
     rows = [[{"text": "✍️ Ask for any topic", "callback_data": "fa:run"}]]
     for key, label, _gh, _bt, _info in AI_TOPICS:
+        if key == "termux":  # has its own menu (termux:menu) now
+            continue
         rows.append([{"text": label[:60], "callback_data": "fa:run:" + key}])
     rows.append([{"text": "🏠 Home", "callback_data": "ui:home"}])
     return {"text": text, "reply_markup": {"inline_keyboard": rows}}
@@ -266,11 +268,37 @@ def auto_menu():
     from auto_scout import AUTO_TOOLS, AUTO_TEXT
     rows = [[{"text": "🔥 Trending on GitHub (right now)", "callback_data": "auto:trend"}]]
     rows.append([{"text": "🕵️ Hacking & Pen-Test (info + tools)", "callback_data": "fa:run:hacking"}])
-    rows.append([{"text": "🤖 Android & Termux Automation (info + tools)", "callback_data": "fa:run:termux"}])
+    rows.append([{"text": "📱 Termux (menu: install + automation)", "callback_data": "termux:menu"}])
     for key, label, _repo in AUTO_TOOLS:
         rows.append([{"text": label[:60], "callback_data": "auto:tool:" + key}])
     rows.append([{"text": "🏠 Home", "callback_data": "ui:home"}])
     return {"text": AUTO_TEXT, "reply_markup": {"inline_keyboard": rows}}
+
+
+TERMUX_MENU_TEXT = (
+    "📱 Termux — turn your Android phone into a dev + automation box\n\n"
+    "Install Termux from F-Droid (the Play Store build is outdated), run "
+    "`termux-setup-storage`, and set the battery to Unrestricted so "
+    "scripts don't get killed. Every chat-automation bot you'll ever run "
+    "(DANA-Kaget claim, CapCut events, earning games, uiautomator2, "
+    "scrcpy, Appium) runs from here.\n\n"
+    "Pick what you want:"
+)
+
+
+def termux_menu():
+    """Dedicated Termux menu: install basics + related studied areas."""
+    rows = [
+        [{"text": "💬 Chat & UI Automation (tools)", "callback_data": "fa:run:termux"}],
+        [{"text": "🔬 Reverse Engineering apk (tools)", "callback_data": "fa:run:reverse"}],
+        [{"text": "🪞 Web & App Cloning (tools)", "callback_data": "fa:run:cloning"}],
+        [{"text": "🕵️ Hacking & Pen-Test (tools)", "callback_data": "fa:run:hacking"}],
+        [{"text": "⚙️ pkg: install python/node/git/jdk", "callback_data": "termux:pkg"}],
+        [{"text": "📖 Termux + chat-automation books", "callback_data": "termux:books"}],
+        [{"text": "🔁 Back to Find ALL", "callback_data": "fa:menu"}],
+        [{"text": "🏠 Home", "callback_data": "ui:home"}],
+    ]
+    return {"text": TERMUX_MENU_TEXT, "reply_markup": {"inline_keyboard": rows}}
 
 
 def category_topic(key):

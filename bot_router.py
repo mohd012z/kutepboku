@@ -21,7 +21,7 @@ from ai_assistant import (BOT_COMMANDS, HELP_TEXT, _chat_reply, ask_intent,
                           auto_menu, category_topic, command_action,
                           deliver_file, delivery_keyboard,
                           delivery_nav_keyboard, find_menu, home_menu,
-                          mql5_menu)
+                          mql5_menu, termux_menu)
 from mql5_scout import (MQL5_LISTINGS, mql5_item_by_index, mql5_paged_message,
                         scrape_trending)
 from mql5_scout import deliver_file as mql5_deliver_file
@@ -217,6 +217,10 @@ async def _run_command(action, user_id, store, message, search_provider):
         return
     if action == "auto_menu":
         menu = auto_menu()
+        await message.reply_text(menu["text"], reply_markup=menu["reply_markup"])
+        return
+    if action == "termux_menu":
+        menu = termux_menu()
         await message.reply_text(menu["text"], reply_markup=menu["reply_markup"])
         return
     if action == "find_menu":
@@ -625,6 +629,45 @@ async def handle_update(update, context, *, search_provider=None, store=None):
                 await _search_and_present(callback.message, user_id, topic,
                                           store, search_provider)
                 return
+        if data.startswith("termux:"):
+            action = data[7:]
+            if action == "menu":
+                menu = termux_menu()
+                await callback.edit_message_text(menu["text"],
+                                                 reply_markup=menu["reply_markup"])
+                return
+            if action == "pkg":
+                await callback.edit_message_text(
+                    "⚙️ Termux packages (type these in Termux):\n"
+                    "pkg update\n"
+                    "pkg install python nodejs git openjdk-17\n"
+                    "pkg install uiautomator2 scrcpy adb\n"
+                    "pkg install termux-api  (termux-notification, "
+                    "termux-tts-speak, termux-battery-status…)\n"
+                    "pkg install termux-x11  (GUI apps)\n\n"
+                    "Chat-automation starter:\n"
+                    "pip install uiautomator2\n"
+                    "adb connect <phone-ip>:5555   (over Wi-Fi)\n"
+                    "python -m uiautomator2 init   (installs atx agent)\n\n"
+                    "Then run the DANA-Kaget / CapCut / earning-bot scripts "
+                    "the Termux script channels share — tap “💬 Chat & UI "
+                    "Automation” for the tools to install.",
+                    reply_markup={"inline_keyboard": [
+                        [{"text": "💬 Chat & UI Automation (tools)",
+                          "callback_data": "fa:run:termux"}],
+                        [{"text": "📱 Termux menu",
+                          "callback_data": "termux:menu"}],
+                        [{"text": "🏠 Home", "callback_data": "ui:home"}]]})
+                return
+            if action == "books":
+                await callback.answer("🔎 Searching termux / chat-automation "
+                                      "books…")
+                await _search_and_present(callback.message, user_id,
+                                          "termux android automation",
+                                          store, search_provider)
+                return
+            await callback.answer("Unknown termux action.", show_alert=True)
+            return
 
     # ---- messages -------------------------------------------------------
     message = getattr(update, "message", None)
