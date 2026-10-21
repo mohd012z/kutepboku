@@ -64,6 +64,20 @@ AI_TOPICS = [
      "selector, Airtest matches by screenshot, scrcpy mirrors+controls, "
      "Appium drives iOS+Android, termux-api fires notifications. Full "
      "install steps are in the Termux menu (⚙️ pkg)."),
+    ("termuxre", "🔬 Termux Reverse Engineering", "reverse engineering android apk",
+     "reverse engineering android",
+     "RE on the phone from Termux (verified against the live package "
+     "index):\n"
+     "• `pkg install radare2` → r2 CLI + rabin2/objdump2; `r2 -d` can even "
+     "debug local processes.\n"
+     "• `pkg install jadx apktool` → unpack + decompile APKs directly on "
+     "the phone (GUI via the x11 repo + termux-x11).\n"
+     "• Frida: `pkg install python` + `pip install frida-tools`, push "
+     "frida-server (arm64) to /data/local/tmp, `chmod 755`, run it, then "
+     "`frida -U`.\n"
+     "• Ghidra: `pkg install openjdk-21 unzip`, download the Ghidra zip "
+     "from GitHub, run `./ghidraRun` (Java app; needs X11 for the GUI).\n"
+     "• `pkg install gdb strace` → low-level tracing. Tap a tool → zip."),
     ("tginfo", "🔎 Telegram Username Check", "telegram user info mtproto",
      "telegram bots chat",
      "Check a Telegram @username: (1) profile — open the @name; a real "
@@ -184,6 +198,13 @@ CURATED_AI_REPOS = {
         ("openatx/uiautomator2", "Android UI automation via Python (taps/swipes by selector)", 8433),
         ("appium/appium", "Cross-platform mobile automation (iOS + Android)", 22114),
         ("openatx/ATX-Agent", "HTTP daemon running on the Android device for automation", 802),
+    ],
+    "termuxre": [
+        ("NationalSecurityAgency/ghidra", "Ghidra — SRE framework (run in Termux: pkg install openjdk-21)", 92373),
+        ("skylot/jadx", "DEX → Java decompiler (Termux: pkg install jadx)", 51144),
+        ("iBotPeaches/Apktool", "APK decompile + recompile (Termux: pkg install apktool)", 26435),
+        ("radareorg/radare2", "radare2 — UNIX-like RE framework (Termux: pkg install radare2)", 25114),
+        ("frida/frida", "Frida — runtime instrumentation (Termux: frida-server + pip frida-tools)", 22402),
     ],
     "tginfo": [
         ("LonamiWebs/Telethon", "Python MTProto Telegram client — fetch user id, profile, history", 12067),

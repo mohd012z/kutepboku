@@ -456,11 +456,40 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(text, TERMUX_MENU_TEXT)
         kb = update.message.reply_text.await_args.kwargs["reply_markup"]
         data = [b["callback_data"] for row in kb["inline_keyboard"] for b in row]
+        self.assertEqual(len(kb["inline_keyboard"]), 12)
         self.assertIn("termux:pkg", data)
-        self.assertIn("fa:run:termux", data)   # related chat-automation tools
-        self.assertIn("fa:run:reverse", data)  # related RE tools
-        self.assertIn("fa:run:cloning", data)  # related cloning tools
+        self.assertIn("fa:run:termux", data)   # chat-automation tools
+        self.assertIn("fa:run:termuxre", data)  # Termux RE (r2/jadx/apktool)
+        self.assertIn("termux:ghidra", data)    # Termux + Ghidra
+        self.assertIn("termux:radare2", data)   # Termux + radare2
+        self.assertIn("termux:frida", data)     # Termux + Frida
+        self.assertIn("fa:run:reverse", data)   # related RE tools
+        self.assertIn("fa:run:cloning", data)   # related cloning tools
         self.assertIn("termux:books", data)
+
+    async def test_termux_re_howto_buttons(self):
+        for action, marker in (("ghidra", "ghidraRun"),
+                               ("radare2", "pkg install radare2"),
+                               ("frida", "frida-server")):
+            with self.subTest(action=action):
+                update = self.callback(f"termux:{action}")
+                await handle_update(update, MagicMock(), store=self.store)
+                up = update.callback_query.edit_message_text.await_args
+                self.assertIn(marker, up.args[0])
+                data = [b["callback_data"]
+                        for row in up.kwargs["reply_markup"]["inline_keyboard"]
+                        for b in row]
+                self.assertIn("fa:run:termuxre", data)
+                self.assertIn("termux:menu", data)
+
+    async def test_termux_menu_callback_edits(self):
+        from ai_assistant import termux_menu
+        update = self.callback("termux:menu")
+        await handle_update(update, MagicMock(), store=self.store)
+        up = update.callback_query.edit_message_text.await_args
+        menu = termux_menu()
+        self.assertEqual(up.args[0], menu["text"])
+        self.assertEqual(up.kwargs["reply_markup"], menu["reply_markup"])
 
     def test_find_menu_excludes_termux(self):
         from ai_assistant import find_menu

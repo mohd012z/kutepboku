@@ -35,6 +35,51 @@ from prompt_forge import forge_menu, forge_prompt, prompt_text
 # callback key ("mt5:ea") -> (market, kind)
 _MQL5_LOOKUP = {key: (market, kind) for key, _label, market, kind in MQL5_LISTINGS}
 
+# termux:ghidra / termux:radare2 / termux:frida -> verified Termux how-to
+_TERMUX_RE_INFO = {
+    "ghidra": (
+        "🧩 Ghidra in Termux (Java app — runs on openjdk-21; GUI needs X11)\n\n"
+        "pkg install openjdk-21 unzip\n"
+        "wget -O ghidra.zip https://github.com/NationalSecurityAgency/"
+        "ghidra/releases/download/Ghidra_12.1.4_build/"
+        "ghidra_12.1.4_PUBLIC_20260921.zip\n"
+        "unzip ghidra.zip && cd Ghidra_12.1.4_PUBLIC_20260921\n"
+        "# GUI (official x11 repo, per termux/termux-x11 README):\n"
+        "pkg install x11-repo\n"
+        "pkg install termux-x11\n"
+        "termux-x11 :0 & ./ghidraRun\n"
+        "# headless (no GUI needed):\n"
+        "support/analyzeHeadless.sh proj 1 -import app.apk\n\n"
+        "Tip: raise the heap in ghidraRun (JAVA_OPTS) — phones have ~2-4 GB."),
+    "radare2": (
+        "🐚 radare2 in Termux (native package, fully headless)\n\n"
+        "pkg install radare2\n"
+        "r2 -q app.apk\n"
+        "[0:]> i      # classes / methods / libraries\n"
+        "[0:]> afl    # list functions\n"
+        "[0:]> pdf @ sym.method   # disassemble one function\n"
+        "[0:]> iz     # interesting strings\n"
+        "[0:]> s main; pd 30\n"
+        "r2 -q -d /system/bin/mediaserver   # debug a live process\n\n"
+        "Also bundled: rabin2 (binaries), radiff2 (diff two apks), "
+        "rasm2 (asm), rz find (search). No GUI needed — pure CLI."),
+    "frida": (
+        "🪝 Frida in Termux (instrument + hook a running app)\n\n"
+        "pkg install python curl unzip\n"
+        "pip install frida-tools\n"
+        "# frida-server (matches frida version, arm64):\n"
+        "curl -O https://github.com/frida/frida/releases/download/"
+        "16.7.10/frida-server-16.7.10-android-arm64.xz\n"
+        "unxz frida-server-*.xz && chmod 755 frida-server-16.7.10-android-arm64\n"
+        "adb push frida-server-16.7.10-android-arm64 /data/local/tmp/frida-server\n"
+        "adb shell \"su -c '/data/local/tmp/frida-server -D &'\"\n"
+        "frida -U -f com.example.app -l script.js   # spawn + hook\n"
+        "frida-ps -U    # list running apps\n\n"
+        "On the same phone: skip adb, run frida-server in one Termux tab, "
+        "frida tools in another. Root (magisk) or an app you own for "
+        "spawning; non-root can attach to unhardened apps."),
+}
+
 db = None
 
 # Leading words users often prepend to a book topic; stripped before the
@@ -649,9 +694,8 @@ async def handle_update(update, context, *, search_provider=None, store=None):
                     "pip install uiautomator2\n"
                     "adb connect <phone-ip>:5555   (over Wi-Fi)\n"
                     "python -m uiautomator2 init   (installs atx agent)\n\n"
-                    "Then run the DANA-Kaget / CapCut / earning-bot scripts "
-                    "the Termux script channels share — tap “💬 Chat & UI "
-                    "Automation” for the tools to install.",
+                    "Then run your own scripts from here — tap “💬 Chat "
+                    "& UI Automation” for the tools to install.",
                     reply_markup={"inline_keyboard": [
                         [{"text": "💬 Chat & UI Automation (tools)",
                           "callback_data": "fa:run:termux"}],
@@ -665,6 +709,22 @@ async def handle_update(update, context, *, search_provider=None, store=None):
                 await _search_and_present(callback.message, user_id,
                                           "termux android automation",
                                           store, search_provider)
+                return
+            if action in ("ghidra", "radare2", "frida"):
+                info = _TERMUX_RE_INFO.get(action)
+                if info is None:
+                    await callback.answer("Unknown termux action.",
+                                          show_alert=True)
+                    return
+                await callback.edit_message_text(
+                    info + "\n\n🔬 Related: tap “Termux RE” for the full "
+                    "tool list (Ghidra, jadx, apktool, radare2, Frida).",
+                    reply_markup={"inline_keyboard": [
+                        [{"text": "🔬 Termux RE (tools)",
+                          "callback_data": "fa:run:termuxre"}],
+                        [{"text": "📱 Termux menu",
+                          "callback_data": "termux:menu"}],
+                        [{"text": "🏠 Home", "callback_data": "ui:home"}]]})
                 return
             await callback.answer("Unknown termux action.", show_alert=True)
             return

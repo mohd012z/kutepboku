@@ -290,6 +290,10 @@ def termux_menu():
     """Dedicated Termux menu: install basics + related studied areas."""
     rows = [
         [{"text": "💬 Chat & UI Automation (tools)", "callback_data": "fa:run:termux"}],
+        [{"text": "🔬 Termux RE (radare2 / jadx / apktool)", "callback_data": "fa:run:termuxre"}],
+        [{"text": "🧩 Termux + Ghidra (openjdk-21)", "callback_data": "termux:ghidra"}],
+        [{"text": "🐚 Termux + radare2 (pkg install radare2)", "callback_data": "termux:radare2"}],
+        [{"text": "🪝 Termux + Frida (frida-server)", "callback_data": "termux:frida"}],
         [{"text": "🔬 Reverse Engineering apk (tools)", "callback_data": "fa:run:reverse"}],
         [{"text": "🪞 Web & App Cloning (tools)", "callback_data": "fa:run:cloning"}],
         [{"text": "🕵️ Hacking & Pen-Test (tools)", "callback_data": "fa:run:hacking"}],
