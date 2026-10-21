@@ -19,13 +19,16 @@ from search_pagination import (build_search_keyboard, new_search_session,
                                process_search_callback)
 from ai_assistant import (BOT_COMMANDS, HELP_TEXT, _chat_reply, ask_intent,
                           auto_menu, category_topic, command_action,
-                          deliver_file, delivery_keyboard, home_menu,
-                          mql5_menu)
+                          deliver_file, delivery_keyboard, find_menu,
+                          home_menu, mql5_menu)
 from mql5_scout import (MQL5_LISTINGS, mql5_item_by_index, mql5_paged_message,
                         scrape_trending)
 from mql5_scout import deliver_file as mql5_deliver_file
 from auto_scout import (_TOOL_LOOKUP, _default_branch, deliver_zip,
                         trending_repos)
+from find_all import (_TOPIC_LOOKUP, find_all, find_all_keyboard,
+                      find_all_message)
+from agent_skills import agent_skills
 
 # callback key ("mt5:ea") -> (market, kind)
 _MQL5_LOOKUP = {key: (market, kind) for key, _label, market, kind in MQL5_LISTINGS}
@@ -76,12 +79,18 @@ async def _search_and_present(message, user_id, topic, store, search_provider):
         await message.reply_text("Search is not configured yet.")
         return
     results = await search_provider(topic)
+    # Built-in agent: study this search (levels up, learns the domain).
+    n = len(results) if isinstance(results, list) else 0
+    try:
+        gained, level = agent_skills().record_search(topic, n, source="ebook")
+    except Exception:
+        gained, level = 0, 1
     if not isinstance(results, list) or not results:
         await message.reply_text(
             "No open-licensed books found for “" + topic[:60] + "”.\n"
             "Only explicitly CC-licensed (open) documents are offered, so "
             "results are sparse — try a broader topic (e.g. machine learning, "
-            "chemistry, philosophy).")
+            "chemistry, philosophy).\n\n🧠 +{g} XP → L{lv}".format(g=gained, lv=level))
         store.set_session(user_id, "MENU", {})
         return
     token = secrets.token_hex(6)
@@ -89,7 +98,7 @@ async def _search_and_present(message, user_id, topic, store, search_provider):
     store.set_session(user_id, "SELECTING_BOOK", data)
     await message.reply_text(
         "📚 Found " + str(len(results)) + " open-licensed book(s) for “"
-        + topic[:60] + "” — pick one:",
+        + topic[:60] + "” — pick one:\n\n🧠 +{g} XP → L{lv}".format(g=gained, lv=level),
         reply_markup=build_search_keyboard(results, 0, token))
 
 
@@ -173,6 +182,63 @@ async def _run_command(action, user_id, store, message, search_provider):
         menu = auto_menu()
         await message.reply_text(menu["text"], reply_markup=menu["reply_markup"])
         return
+    if action == "find_menu":
+        menu = find_menu()
+        await message.reply_text(menu["text"], reply_markup=menu["reply_markup"])
+        return
+    if action == "agent":
+        try:
+            await message.reply_text(agent_skills().summary_text())
+        except Exception:
+            await message.reply_text("🧠 Agent view unavailable right now.")
+        return
+    if action.startswith("find:"):
+        key = action.split(":", 1)[1]
+        if key not in _TOPIC_LOOKUP:
+            await message.reply_text("Unknown area.")
+            return
+        await _run_find_all(message, user_id, store, search_provider, key=key)
+        return
+
+
+async def _run_find_all(message, user_id, store, search_provider,
+                        topic=None, key=None):
+    """Combined Find ALL: open ebooks + apps/repos for one topic.
+
+    A curated AI sub-topic (key) runs immediately on its known phrasing; a
+    bare call (topic=None, key=None) enters FIND_TOPIC and waits for the
+    user to type a topic (free-form path)."""
+    if topic is None and key in _TOPIC_LOOKUP:
+        topic = _TOPIC_LOOKUP[key][2]  # the ebook-side phrasing
+    if topic is None:
+        store.set_session(user_id, "FIND_TOPIC", {})
+        await message.reply_text(
+            "✍️ What topic? Reply with it — e.g. \"ai agent\", "
+            "\"web automation\", \"forex trading\". "
+            "I'll gather open ebooks AND the best apps together. "
+            "(❌ Cancel to stop.)")
+        return
+    topic = str(topic)[:200]
+    await message.reply_text("⏳ Finding ALL for “" + topic + "” — ebooks + apps…")
+    try:
+        ebooks = (await search_provider(topic)) if search_provider is not None else []
+        if not isinstance(ebooks, list):
+            ebooks = []
+    except Exception:
+        ebooks = []
+    result = await asyncio.to_thread(find_all, topic, key=key, ebooks=ebooks)
+    # Built-in agent: study this search too.
+    try:
+        gained, level = agent_skills().record_search(topic, len(result["ebooks"]),
+                                                     source="find_all")
+    except Exception:
+        gained, level = 0, 1
+    token = secrets.token_hex(6)
+    store.set_session(user_id, "FIND_RESULT",
+                      {"result": result, "fa_token": token})
+    await message.reply_text(find_all_message(result)
+                             + "\n\n🧠 +" + str(gained) + " XP → L" + str(level),
+                             reply_markup=find_all_keyboard(result, token))
 
 
 async def _send_repo_zip(update, user_id, store, item):
@@ -378,6 +444,70 @@ async def handle_update(update, context, *, search_provider=None, store=None):
                 return
             await _send_repo_zip(update, user_id, store, items[index])
             return
+        if data.startswith("fae:"):
+            # "Show all ebooks" from a Find ALL result -> standard book list
+            state, sdata = store.get_session(user_id)
+            if state != "FIND_RESULT":
+                await callback.answer("This selection has expired.", show_alert=True)
+                return
+            token = data[4:]
+            if sdata.get("fa_token") != token:
+                await callback.answer("This selection has expired.", show_alert=True)
+                return
+            result = sdata.get("result") or {}
+            books = result.get("ebooks") or []
+            if not books:
+                await callback.answer("No ebooks in this result.", show_alert=True)
+                return
+            btoken = secrets.token_hex(6)
+            store.set_session(user_id, "SELECTING_BOOK",
+                              new_search_session(result.get("topic", ""), books,
+                                                 btoken))
+            await callback.answer("")
+            await callback.edit_message_text(
+                "📚 " + str(len(books)) + " open-licensed ebook(s) for “"
+                + str(result.get("topic", ""))[:60] + "” — pick one:",
+                reply_markup=build_search_keyboard(books, 0, btoken))
+            return
+        if data.startswith("fap:"):
+            # send one app's repo zip from a Find ALL result
+            state, sdata = store.get_session(user_id)
+            if state != "FIND_RESULT":
+                await callback.answer("This selection has expired.", show_alert=True)
+                return
+            parts = data.split(":")
+            if len(parts) != 3 or sdata.get("fa_token") != parts[1]:
+                await callback.answer("Bad item.", show_alert=True)
+                return
+            try:
+                index = int(parts[2])
+            except ValueError:
+                await callback.answer("Bad item.", show_alert=True)
+                return
+            apps = (sdata.get("result") or {}).get("apps") or []
+            if index < 0 or index >= len(apps):
+                await callback.answer("Bad item.", show_alert=True)
+                return
+            await _send_repo_zip(update, user_id, store, apps[index])
+            return
+        if data.startswith("fa:"):
+            action = data[3:]
+            if action == "menu":
+                menu = find_menu()
+                await callback.edit_message_text(menu["text"],
+                                                 reply_markup=menu["reply_markup"])
+                return
+            if action == "run":
+                key = None
+                if ":" in action:
+                    key = action.split(":", 1)[1]
+                    if key not in _TOPIC_LOOKUP:
+                        await callback.answer("Unknown topic.", show_alert=True)
+                        return
+                await callback.answer("⏳ Finding ALL…")
+                await _run_find_all(callback.message, user_id, store,
+                                    search_provider, key=key)
+                return
         if data.startswith("ui:"):
             action = data[3:]
             if action in ("home", "menu"):
@@ -388,6 +518,12 @@ async def handle_update(update, context, *, search_provider=None, store=None):
                 return
             if action == "help":
                 await callback.edit_message_text(HELP_TEXT)
+                return
+            if action == "agent":
+                try:
+                    await callback.edit_message_text(agent_skills().summary_text())
+                except Exception:
+                    await callback.edit_message_text("🧠 Agent view unavailable.")
                 return
             if action == "cancel":
                 store.clear_session(user_id)
@@ -423,7 +559,8 @@ async def handle_update(update, context, *, search_provider=None, store=None):
         action = command_action(name)
         if action is not None:
             if state in ("SELECTING_BOOK", "CHOOSE_DELIVERY",
-                         "MQL5_LISTING", "AUTO_LISTING"):
+                         "MQL5_LISTING", "AUTO_LISTING", "FIND_TOPIC",
+                         "FIND_RESULT"):
                 store.clear_session(user_id)
             await _run_command(action, user_id, store, message,
                                search_provider)
@@ -440,6 +577,21 @@ async def handle_update(update, context, *, search_provider=None, store=None):
         return
     if text == "/help":
         await message.reply_text(HELP_TEXT)
+        return
+
+    # Find ALL: a typed topic answers the pending "What topic?" prompt
+    if state == "FIND_TOPIC":
+        if text in ("/cancel", "cancel", "Cancel"):
+            store.clear_session(user_id)
+            await message.reply_text("Cancelled.")
+            return
+        topic = _clean_query(text)
+        if not topic:
+            await message.reply_text("What topic should I search for? "
+                                     "e.g. \"quantum computing\"")
+            return
+        await _run_find_all(message, user_id, store, search_provider,
+                            topic=topic)
         return
 
     # mid-flow plain text starts a new action

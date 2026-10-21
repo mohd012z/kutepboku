@@ -22,8 +22,16 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
             "MINDA_BASE_URL": "",
         })
         self.env.start()
+        # Keep the built-in agent hermetic: don't touch the real state file.
+        self.agent_mock = MagicMock()
+        self.agent_mock.record_search.side_effect = lambda *a, **k: (10, 1)
+        self.agent_mock.summary_text.side_effect = lambda: "agent test"
+        self.agent_patch = patch("bot_router.agent_skills",
+                                 return_value=self.agent_mock)
+        self.agent_patch.start()
 
     async def asyncTearDown(self):
+        self.agent_patch.stop()
         self.env.stop()
         self.temp.cleanup()
 
@@ -415,11 +423,48 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
     def test_bot_command_markup_shape(self):
         from ai_assistant import bot_command_markup
         commands = bot_command_markup()
-        self.assertEqual(len(commands), 9)
+        self.assertEqual(len(commands), 12)
         self.assertEqual(commands[0]["command"], "start")
+        names = [c["command"] for c in commands]
+        self.assertIn("find", names)
+        self.assertIn("marketing", names)
+        self.assertIn("agent", names)
         for entry in commands:
             self.assertTrue(entry["description"])
             self.assertLessEqual(len(entry["description"]), 256)
+
+    # ---- built-in agent --------------------------------------------------
+    async def test_search_records_agent_study(self):
+        update = self.message("machine learning")
+        await handle_update(update, MagicMock(), store=self.store,
+                            search_provider=self.provider())
+        self.agent_mock.record_search.assert_called_once_with(
+            "machine learning", 1, source="ebook")
+        reply = update.message.reply_text.await_args.args[0]
+        self.assertIn("🧠 +10 XP → L1", reply)
+
+    async def test_agent_command_shows_summary(self):
+        update = self.message("/agent")
+        await handle_update(update, MagicMock(), store=self.store)
+        self.assertEqual(
+            update.message.reply_text.await_args.args[0], "agent test")
+
+    async def test_marketing_command_runs_find_all_marketing(self):
+        update = self.message("/marketing")
+        with patch("bot_router.find_all", return_value={
+                "topic": "ai marketing advertising", "ebooks": [],
+                "apps": [{"id": "a/b", "title": "b",
+                          "url": "https://github.com/a/b"}]}):
+            await handle_update(update, MagicMock(), store=self.store,
+                                search_provider=self.provider())
+        self.assertEqual(self.store.get_session(12345)[0], "FIND_RESULT")
+
+    async def test_agent_button_edits_to_summary(self):
+        update = self.callback("ui:agent")
+        await handle_update(update, MagicMock(), store=self.store)
+        self.assertEqual(
+            update.callback_query.edit_message_text.await_args.args[0],
+            "agent test")
 
     # ---- filler helpers (from PR #11) -------------------------------------
     def test_clean_query_strips_filler(self):
@@ -433,6 +478,95 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(_clean_query("bbma"), "bbma")
         self.assertEqual(_clean_query("machine learning"), "machine learning")
         self.assertEqual(_clean_query(""), "")
+
+
+class FindAllRouterTests(RouterTests):
+    """Find ALL: ebooks + apps combined flow."""
+
+    def _fa_result(self):
+        return {
+            "topic": "ai agent",
+            "ebooks": [dict(BOOK)],
+            "apps": [{"id": "owner/repo", "title": "repo — an agent",
+                      "url": "https://github.com/owner/repo", "aid": "x"}],
+        }
+
+    async def test_find_command_opens_menu(self):
+        update = self.message("/find")
+        await handle_update(update, MagicMock(), store=self.store)
+        markup = update.message.reply_text.await_args.kwargs["reply_markup"]
+        data = [btn["callback_data"] for row in markup["inline_keyboard"]
+                for btn in row]
+        self.assertIn("fa:run", data)
+        self.assertIn("fa:run:agents", data)
+        self.assertIn("fa:run:webauto", data)
+
+    async def test_find_run_button_prompts_for_topic(self):
+        update = self.callback("fa:run")
+        await handle_update(update, MagicMock(), store=self.store)
+        self.assertEqual(self.store.get_session(12345)[0], "FIND_TOPIC")
+        self.assertIn("What topic?",
+                      update.callback_query.message.reply_text.await_args.args[0])
+
+    async def test_find_home_button_opens_menu(self):
+        update = self.callback("fa:menu")
+        await handle_update(update, MagicMock(), store=self.store)
+        data = [btn["callback_data"] for row in
+                update.callback_query.edit_message_text.await_args.kwargs["reply_markup"]["inline_keyboard"]
+                for btn in row]
+        self.assertIn("fa:run", data)
+        self.assertIn("fa:run:agents", data)
+
+    async def test_typed_topic_runs_find_all(self):
+        self.store.set_session(12345, "FIND_TOPIC", {})
+        update = self.message("ai agent")
+        with patch("bot_router.find_all", return_value=self._fa_result()):
+            await handle_update(update, MagicMock(), store=self.store,
+                                search_provider=self.provider())
+        self.assertEqual(self.store.get_session(12345)[0], "FIND_RESULT")
+        markup = update.message.reply_text.await_args.kwargs["reply_markup"]
+        data = [btn["callback_data"] for row in markup["inline_keyboard"]
+                for btn in row]
+        self.assertTrue(any(d.startswith("fae:") for d in data))
+        self.assertTrue(any(d.startswith("fap:") for d in data))
+
+    async def test_cancel_in_find_topic(self):
+        self.store.set_session(12345, "FIND_TOPIC", {})
+        update = self.message("cancel")
+        await handle_update(update, MagicMock(), store=self.store)
+        self.assertEqual(self.store.get_session(12345), ("IDLE", {}))
+
+    async def test_fae_opens_standard_book_list(self):
+        token = "abcdef123456"
+        self.store.set_session(12345, "FIND_RESULT",
+                               {"result": self._fa_result(), "fa_token": token})
+        update = self.callback("fae:" + token)
+        await handle_update(update, MagicMock(), store=self.store)
+        self.assertEqual(self.store.get_session(12345)[0], "SELECTING_BOOK")
+        data = [btn["callback_data"] for row in
+                update.callback_query.edit_message_text.await_args.kwargs["reply_markup"]["inline_keyboard"]
+                for btn in row]
+        self.assertTrue(any(d.startswith("sr:b:") for d in data))
+
+    async def test_fae_wrong_token_expires(self):
+        self.store.set_session(12345, "FIND_RESULT",
+                               {"result": self._fa_result(),
+                                "fa_token": "abcdef123456"})
+        update = self.callback("fae:" + "111111222222")
+        await handle_update(update, MagicMock(), store=self.store)
+        self.assertEqual(self.store.get_session(12345)[0], "FIND_RESULT")
+        self.assertIn("expired", update.callback_query.answer.await_args.args[0])
+
+    async def test_fap_sends_repo_zip(self):
+        token = "abcdef123456"
+        self.store.set_session(12345, "FIND_RESULT",
+                               {"result": self._fa_result(), "fa_token": token})
+        update = self.callback("fap:" + token + ":0")
+        with patch("bot_router._send_repo_zip", new=AsyncMock()) as send:
+            await handle_update(update, MagicMock(), store=self.store)
+        self.assertTrue(send.await_count >= 1)
+        item = send.await_args.args[3]
+        self.assertEqual(item["id"], "owner/repo")
 
 
 if __name__ == "__main__":

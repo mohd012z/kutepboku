@@ -51,9 +51,19 @@ HELP_TEXT = (
     "(fail-closed: rather than hand you an unlicensed file, I return nothing).\n"
     "• Pick a book from the list, then choose Send file (I download and "
     "send it) or Link (I send the direct download link).\n"
+    "• ✨ Find ALL — one topic → open ebooks AND the best apps / source "
+    "code (GitHub, by stars) together.\n"
+    "• 📣 AI Marketing — a ready-made agent: AI ad/marketing ebooks + the "
+    "top AI marketing / ad-automation tools.\n"
+    "• 🧠 Agent — I'm a built-in AI agent that studies every search and "
+    "levels up; open it to see my skill level, domains learned, and strongest "
+    "topics.\n"
     "• Bottom-left ⋮ menu = quick commands (see below).\n"
     "\nCommands:\n"
     "/start — main menu\n"
+    "/find — Find ALL (ebooks + apps) for a topic\n"
+    "/marketing — AI advertising & marketing (ebooks + apps)\n"
+    "/agent — my skill level & what I've learned\n"
     "/forex — forex trading books (CC)\n"
     "/hacking — hacking automation books\n"
     "/android — android automation books\n"
@@ -73,6 +83,10 @@ BOT_COMMANDS = [
     ("android", "Android automation books", "search:android automation"),
     ("mql5", "Trending EAs & indicators (MQL5)", "mql5_menu"),
     ("tools", "Automation tools (hacking + Android)", "auto_menu"),
+    ("find", "Find ALL ebooks + apps for a topic", "find_menu"),
+    ("marketing", "AI advertising & marketing agent (ebooks + apps)",
+     "find:marketing"),
+    ("agent", "Built-in agent: skill level & what it has learned", "agent"),
     ("help", "Instructions & how to use", "help"),
     ("cancel", "Stop the current action", "cancel"),
     ("status", "Admin diagnostics (admin only)", "admin"),
@@ -152,6 +166,8 @@ def ask_intent(text, *, client=requests, base_url=None, api_key=None,
 
 def home_menu():
     rows = []
+    rows.append([{"text": "✨ Find ALL (ebooks + apps)",
+                  "callback_data": "fa:menu"}])
     left, right = [], []
     for index, (key, label, _topic) in enumerate(CATEGORIES):
         (left if index % 2 == 0 else right).append(
@@ -163,9 +179,29 @@ def home_menu():
         rows.append(left + right)
     rows.append([{"text": "🏷️ MQL5 EAs/Indicators", "callback_data": "mql5:menu"}])
     rows.append([{"text": "🛠️ Automation Tools", "callback_data": "auto:menu"}])
+    rows.append([{"text": "📣 AI Marketing", "callback_data": "fa:run:marketing"}])
+    rows.append([{"text": "🧠 Agent (level & learning)", "callback_data": "ui:agent"}])
     rows.append([{"text": "❓ How to use", "callback_data": "ui:help"}])
     rows.append([{"text": "❌ Cancel", "callback_data": "ui:cancel"}])
     return {"text": HOME_TEXT, "reply_markup": {"inline_keyboard": rows}}
+
+
+def find_menu():
+    """Find ALL entry: a curated AI-agent / web-automation sub-topic grid plus
+    a free-form prompt. Pressing a sub-topic runs the combined ebook+app
+    search for that studied area."""
+    from find_all import AI_TOPICS
+    text = (
+        "✨ Find ALL — ebooks + apps for one topic\n\n"
+        "Pick a studied AI-agent / web-automation area, or tap "
+        "“✍️ Ask for any topic” and type what you want. I gather open "
+        "ebooks AND the best apps / source code together."
+    )
+    rows = [[{"text": "✍️ Ask for any topic", "callback_data": "fa:run"}]]
+    for key, label, _gh, _bt in AI_TOPICS:
+        rows.append([{"text": label[:60], "callback_data": "fa:run:" + key}])
+    rows.append([{"text": "🏠 Home", "callback_data": "ui:home"}])
+    return {"text": text, "reply_markup": {"inline_keyboard": rows}}
 
 
 def mql5_menu():
