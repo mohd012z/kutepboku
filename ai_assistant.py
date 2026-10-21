@@ -69,7 +69,7 @@ HELP_TEXT = (
     "(jadx, apktool, Ghidra, Frida, objection) + related ebooks.\n"
     "• 📱 Termux & Chat Automation (/termux) — script an Android phone from "
     "Termux (uiautomator2, Airtest, ATX-Agent, scrcpy, Appium) — the "
-    "DANA-Kaget / earning-bot pattern.\n"
+    "earning-bot / chat-claim pattern.\n"
     "• 🔎 Telegram Username Check (/tginfo) — how to look up a @username's "
     "details (id, profile, history) + scam-signal checklist.\n"
     "• 🕸️ Download a Website (Scam Check) (/webscam) — mirror any site "
@@ -280,7 +280,7 @@ TERMUX_MENU_TEXT = (
     "Install Termux from F-Droid (the Play Store build is outdated), run "
     "`termux-setup-storage`, and set the battery to Unrestricted so "
     "scripts don't get killed. Every chat-automation bot you'll ever run "
-    "(DANA-Kaget claim, CapCut events, earning games, uiautomator2, "
+    "(CapCut events, earning games, uiautomator2, "
     "scrcpy, Appium) runs from here.\n\n"
     "Pick what you want:"
 )
