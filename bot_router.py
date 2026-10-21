@@ -122,6 +122,27 @@ _TERMUX_RE_INFO = {
         "Pattern: swap a struct-field immediate (e.g. add x0,x22,0x30 -> "
         "0x20) to read the sibling 'unlocked' member. Re-sign after patching "
         "if you install normally (apksigner)."),
+    "ytdlp": (
+        "🎬 yt-dlp in Termux (YTDLnis GUI's engine — native pkg)\n\n"
+        "pkg install python-yt-dlp ffmpeg\n"
+        "yt-dlp --version\n\n"
+        "Video (best 1080p, merged mp4):\n"
+        "yt-dlp -f 'bestvideo[height<=1080]+bestaudio/best[height<=1080]' "
+        "--merge-output-format mp4 <url>\n"
+        "Audio (best flac / 320k mp3):\n"
+        "yt-dlp -x --audio-format flac <url>\n"
+        "yt-dlp -x --audio-format mp3 --audio-quality 320K <url>\n\n"
+        "Options the YTDLnis GUI wraps:\n"
+        "--embed-metadata --embed-thumbnail   # tags + cover\n"
+        "--write-subs --sub-langs 'en.*,original' --embed-subs\n"
+        "--sponsorblock-remove sponsor,intro,outro\n"
+        "--split-chapters\n"
+        "yt-dlp -a urls.txt   # batch: one URL per line\n\n"
+        "This file (ytdlnis_gui.py) = a tkinter front-end over yt-dlp. "
+        "The headless CLI does everything without a GUI; for the GUI on "
+        "Termux: pkg install python-tkinter x11-repo termux-x11, then "
+        "termux-x11 :0 & python ytdlnis_gui.py (needs a display).\n"
+        "YTDLnis (deniscerri) = the Android app this is ported from."),
 }
 
 db = None
