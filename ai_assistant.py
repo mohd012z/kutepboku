@@ -53,6 +53,11 @@ HELP_TEXT = (
     "send it) or Link (I send the direct download link).\n"
     "• ✨ Find ALL — one topic → open ebooks AND the best apps / source "
     "code (GitHub, by stars) together.\n"
+    "• 🪄 Prompt Forge — build a strong, evidence-first prompt for ANY AI "
+    "(automation, research, developer, data science, photo, video…). Tap it, "
+    "pick a capability, describe your task — I craft a ready-to-paste prompt "
+    "with hard evidence rules (cite, label FACT/INFER/ASSUME, never "
+    "fabricate) and quality gates.\n"
     "• 📣 AI Marketing — a ready-made agent: AI ad/marketing ebooks + the "
     "top AI marketing / ad-automation tools.\n"
     "• 🧠 Agent — I'm a built-in AI agent that studies every search and "
@@ -62,6 +67,7 @@ HELP_TEXT = (
     "\nCommands:\n"
     "/start — main menu\n"
     "/find — Find ALL (ebooks + apps) for a topic\n"
+    "/prompt — Prompt Forge (strong AI prompts for any capability)\n"
     "/marketing — AI advertising & marketing (ebooks + apps)\n"
     "/agent — my skill level & what I've learned\n"
     "/forex — forex trading books (CC)\n"
@@ -84,6 +90,8 @@ BOT_COMMANDS = [
     ("mql5", "Trending EAs & indicators (MQL5)", "mql5_menu"),
     ("tools", "Automation tools (hacking + Android)", "auto_menu"),
     ("find", "Find ALL ebooks + apps for a topic", "find_menu"),
+    ("prompt", "Prompt Forge — strong AI prompts for any capability",
+     "prompt_menu"),
     ("marketing", "AI advertising & marketing agent (ebooks + apps)",
      "find:marketing"),
     ("agent", "Built-in agent: skill level & what it has learned", "agent"),
@@ -180,6 +188,7 @@ def home_menu():
     rows.append([{"text": "🏷️ MQL5 EAs/Indicators", "callback_data": "mql5:menu"}])
     rows.append([{"text": "🛠️ Automation Tools", "callback_data": "auto:menu"}])
     rows.append([{"text": "📣 AI Marketing", "callback_data": "fa:run:marketing"}])
+    rows.append([{"text": "🪄 Prompt Forge (any AI)", "callback_data": "pf:menu"}])
     rows.append([{"text": "🧠 Agent (level & learning)", "callback_data": "ui:agent"}])
     rows.append([{"text": "❓ How to use", "callback_data": "ui:help"}])
     rows.append([{"text": "❌ Cancel", "callback_data": "ui:cancel"}])
@@ -235,6 +244,15 @@ def delivery_keyboard():
         [{"text": "📥 Send file here", "callback_data": "dl:f"}],
         [{"text": "🔗 Link only", "callback_data": "dl:l"}],
         [{"text": "🏠 Home", "callback_data": "ui:home"}],
+    ]}
+
+
+def delivery_nav_keyboard():
+    """Shown after a file/link delivery: go back to the same results list
+    or start a fresh search."""
+    return {"inline_keyboard": [
+        [{"text": "🔙 Back to results", "callback_data": "dlb:back"}],
+        [{"text": "🔎 Search more", "callback_data": "dlb:more"}],
     ]}
 
 

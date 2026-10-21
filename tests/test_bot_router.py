@@ -151,35 +151,83 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         text = update.callback_query.edit_message_text.await_args.args[0]
         self.assertIn("msasoup", text)
 
-    async def test_link_delivery_sends_url(self):
-        self.store.set_session(12345, "CHOOSE_DELIVERY", {"book": dict(BOOK)})
+    async def test_link_delivery_sends_url_and_nav(self):
+        self.store.set_session(12345, "CHOOSE_DELIVERY", {
+            "book": dict(BOOK), "results": [dict(BOOK)],
+            "search_token": "abcdef123456", "current_page": 0,
+            "search_query": "machine learning"})
         update = self.callback("dl:l")
         await handle_update(update, MagicMock(), store=self.store)
-        self.assertEqual(self.store.get_session(12345), ("IDLE", {}))
-        sent = update.callback_query.message.reply_text.await_args.args[0]
-        self.assertIn("https://archive.org/download/x/book.pdf", sent)
+        # results are kept so "back to results" works
+        self.assertEqual(self.store.get_session(12345)[0], "CHOOSE_DELIVERY")
+        sent = update.callback_query.message.reply_text.await_args
+        self.assertIn("https://archive.org/download/x/book.pdf", sent.args[0])
+        nav = [btn["callback_data"] for row in sent.kwargs["reply_markup"]
+               ["inline_keyboard"] for btn in row]
+        self.assertIn("dlb:back", nav)
+        self.assertIn("dlb:more", nav)
 
-    async def test_file_delivery_sends_document(self):
-        self.store.set_session(12345, "CHOOSE_DELIVERY", {"book": dict(BOOK)})
+    async def test_file_delivery_sends_document_and_nav(self):
+        self.store.set_session(12345, "CHOOSE_DELIVERY", {
+            "book": dict(BOOK), "results": [dict(BOOK)],
+            "search_token": "abcdef123456", "current_page": 0,
+            "search_query": "machine learning"})
         update = self.callback("dl:f")
         with patch("bot_router.deliver_file", return_value=("pdf",
                     "https://archive.org/download/x/book.pdf")) as dl:
             await handle_update(update, MagicMock(), store=self.store)
         dl.assert_called_once()
-        self.assertEqual(self.store.get_session(12345), ("IDLE", {}))
+        self.assertEqual(self.store.get_session(12345)[0], "CHOOSE_DELIVERY")
         replies = [c.args[0] for c in
                    update.callback_query.message.reply_text.await_args_list]
         self.assertTrue(any(r.startswith("✅ Sent (.pdf)") for r in replies))
+        nav = [btn["callback_data"] for row in
+               update.callback_query.message.reply_text.await_args_list[-1]
+               .kwargs["reply_markup"]["inline_keyboard"] for btn in row]
+        self.assertIn("dlb:back", nav)
 
     async def test_file_delivery_failure_falls_back_to_link(self):
-        self.store.set_session(12345, "CHOOSE_DELIVERY", {"book": dict(BOOK)})
+        self.store.set_session(12345, "CHOOSE_DELIVERY", {
+            "book": dict(BOOK), "results": [dict(BOOK)],
+            "search_token": "abcdef123456", "current_page": 0,
+            "search_query": "machine learning"})
         update = self.callback("dl:f")
         with patch("bot_router.deliver_file", side_effect=ValueError("too big")):
             await handle_update(update, MagicMock(), store=self.store)
-        self.assertEqual(self.store.get_session(12345), ("IDLE", {}))
+        self.assertEqual(self.store.get_session(12345)[0], "CHOOSE_DELIVERY")
         replies = [c.args[0] for c in
                    update.callback_query.message.reply_text.await_args_list]
         self.assertTrue(any("delivery failed" in r for r in replies))
+
+    async def test_dlb_back_returns_to_results(self):
+        self.store.set_session(12345, "CHOOSE_DELIVERY", {
+            "book": dict(BOOK), "results": [dict(BOOK)],
+            "search_token": "abcdef123456", "current_page": 0,
+            "search_query": "machine learning"})
+        update = self.callback("dlb:back")
+        await handle_update(update, MagicMock(), store=self.store)
+        self.assertEqual(self.store.get_session(12345)[0], "SELECTING_BOOK")
+        data = [btn["callback_data"] for row in
+                update.callback_query.edit_message_text.await_args.kwargs
+                ["reply_markup"]["inline_keyboard"] for btn in row]
+        self.assertIn("sr:b:abcdef123456:book_1", data)
+
+    async def test_dlb_more_returns_home(self):
+        self.store.set_session(12345, "CHOOSE_DELIVERY", {
+            "book": dict(BOOK), "results": [dict(BOOK)],
+            "search_token": "abcdef123456"})
+        update = self.callback("dlb:more")
+        await handle_update(update, MagicMock(), store=self.store)
+        self.assertEqual(self.store.get_session(12345)[0], "MENU")
+        self.assertIn("msasoup",
+                      update.callback_query.edit_message_text.await_args.args[0])
+
+    async def test_dlb_back_without_results_alerts(self):
+        self.store.set_session(12345, "CHOOSE_DELIVERY", {"book": dict(BOOK)})
+        update = self.callback("dlb:back")
+        await handle_update(update, MagicMock(), store=self.store)
+        self.assertIn("No results to go back to.",
+                      update.callback_query.answer.await_args.args[0])
 
     async def test_expired_delivery_rejected(self):
         self.store.set_session(12345, "MENU", {})
@@ -423,12 +471,13 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
     def test_bot_command_markup_shape(self):
         from ai_assistant import bot_command_markup
         commands = bot_command_markup()
-        self.assertEqual(len(commands), 12)
+        self.assertEqual(len(commands), 13)
         self.assertEqual(commands[0]["command"], "start")
         names = [c["command"] for c in commands]
         self.assertIn("find", names)
         self.assertIn("marketing", names)
         self.assertIn("agent", names)
+        self.assertIn("prompt", names)
         for entry in commands:
             self.assertTrue(entry["description"])
             self.assertLessEqual(len(entry["description"]), 256)
@@ -567,6 +616,66 @@ class FindAllRouterTests(RouterTests):
         self.assertTrue(send.await_count >= 1)
         item = send.await_args.args[3]
         self.assertEqual(item["id"], "owner/repo")
+
+
+class PromptForgeRouterTests(RouterTests):
+    """Prompt Forge: /prompt -> pick capability -> type goal -> forged prompt."""
+
+    async def test_prompt_command_opens_forge_menu(self):
+        update = self.message("/prompt")
+        await handle_update(update, MagicMock(), store=self.store)
+        markup = update.message.reply_text.await_args.kwargs["reply_markup"]
+        data = [btn["callback_data"] for row in markup["inline_keyboard"]
+                for btn in row]
+        self.assertIn("pf:cap:developer", data)
+        self.assertIn("pf:cap:video", data)
+
+    async def test_cap_callback_prompts_for_goal(self):
+        update = self.callback("pf:cap:data")
+        await handle_update(update, MagicMock(), store=self.store)
+        state, sdata = self.store.get_session(12345)
+        self.assertEqual(state, "FORGE_TOPIC")
+        self.assertEqual(sdata["cap"], "data")
+        self.assertIn("describe the task",
+                      update.callback_query.edit_message_text.await_args.args[0])
+
+    async def test_typed_goal_forges_prompt(self):
+        self.store.set_session(12345, "FORGE_TOPIC", {"cap": "developer"})
+        forged = {"capability": "developer", "label": "💻 Developer",
+                  "prompt": "ROLE\nYou are...\nTASK\n..." * 6,
+                  "mode": "template", "sections": 7}
+        update = self.message("fix a race condition")
+        with patch("bot_router.forge_prompt", return_value=forged) as forge:
+            await handle_update(update, MagicMock(), store=self.store)
+        forge.assert_called_once_with("developer", "fix a race condition", "")
+        self.assertEqual(self.store.get_session(12345), ("IDLE", {}))
+        # [0] is the "Forging…" progress message; [1] is the forged prompt
+        self.assertIn("Forging",
+                      update.message.reply_text.await_args_list[0].args[0])
+        text = update.message.reply_text.await_args_list[1].args[0]
+        self.assertIn("ROLE", text)
+        self.assertIn("```", text)
+        # agent studied it
+        self.agent_mock.record_search.assert_called_once_with(
+            "prompt:developer", 1, source="prompt")
+
+    async def test_goal_with_context_passes_context(self):
+        self.store.set_session(12345, "FORGE_TOPIC", {"cap": "analysis"})
+        update = self.message("summarize the report\n\nIt's Q3, 40 pages.")
+        with patch("bot_router.forge_prompt", return_value={
+                "capability": "analysis", "label": "📊 Analysis",
+                "prompt": "ROLE\nx" * 20, "mode": "template", "sections": 7}) as forge:
+            await handle_update(update, MagicMock(), store=self.store)
+        self.assertIsNotNone(forge.call_args)
+        self.assertEqual(forge.call_args.args,
+                         ("analysis", "summarize the report",
+                          "It's Q3, 40 pages."))
+
+    async def test_cancel_in_forge_topic(self):
+        self.store.set_session(12345, "FORGE_TOPIC", {"cap": "general"})
+        update = self.message("cancel")
+        await handle_update(update, MagicMock(), store=self.store)
+        self.assertEqual(self.store.get_session(12345), ("IDLE", {}))
 
 
 if __name__ == "__main__":

@@ -19,8 +19,9 @@ from search_pagination import (build_search_keyboard, new_search_session,
                                process_search_callback)
 from ai_assistant import (BOT_COMMANDS, HELP_TEXT, _chat_reply, ask_intent,
                           auto_menu, category_topic, command_action,
-                          deliver_file, delivery_keyboard, find_menu,
-                          home_menu, mql5_menu)
+                          deliver_file, delivery_keyboard,
+                          delivery_nav_keyboard, find_menu, home_menu,
+                          mql5_menu)
 from mql5_scout import (MQL5_LISTINGS, mql5_item_by_index, mql5_paged_message,
                         scrape_trending)
 from mql5_scout import deliver_file as mql5_deliver_file
@@ -29,6 +30,7 @@ from auto_scout import (_TOOL_LOOKUP, _default_branch, deliver_zip,
 from find_all import (_TOPIC_LOOKUP, find_all, find_all_keyboard,
                       find_all_message)
 from agent_skills import agent_skills
+from prompt_forge import forge_menu, forge_prompt, prompt_text
 
 # callback key ("mt5:ea") -> (market, kind)
 _MQL5_LOOKUP = {key: (market, kind) for key, _label, market, kind in MQL5_LISTINGS}
@@ -102,17 +104,27 @@ async def _search_and_present(message, user_id, topic, store, search_provider):
         reply_markup=build_search_keyboard(results, 0, token))
 
 
-async def _deliver(callback, user_id, store, book, mode):
-    """mode 'file' -> download + sendDocument; 'link' -> send the URL."""
+async def _deliver(callback, user_id, store, book, mode, sdata=None):
+    """mode 'file' -> download + sendDocument; 'link' -> send the URL.
+    Restores the results list (CHOOSE_DELIVERY) after delivery and shows
+    nav buttons so the user can go back to results or search more."""
     message = callback.message
+    restored = False
+    if isinstance(sdata, dict):
+        results = sdata.get("results")
+        token = sdata.get("search_token")
+        if isinstance(results, list) and results and token:
+            store.set_session(user_id, "CHOOSE_DELIVERY", dict(sdata))
+            restored = True
+    nav = delivery_nav_keyboard() if restored else None
     if mode == "link":
         url = str(book.get("source_url", ""))
         if not url:
             await message.reply_text("Link unavailable for this book.")
             return
-        await message.reply_text("🔗 " + str(book.get("title", "Open eBook"))[:120]
-                                 + "\n" + url)
-        store.clear_session(user_id)
+        await message.reply_text(
+            "🔗 " + str(book.get("title", "Open eBook"))[:120] + "\n" + url,
+            reply_markup=nav)
         return
     token = os.getenv("TELEGRAM_BOT_TOKEN", "")
     chat_id = str(os.getenv("TELEGRAM_DELIVERY_CHAT_ID") or user_id)
@@ -121,11 +133,12 @@ async def _deliver(callback, user_id, store, book, mode):
     try:
         ext, _ = await asyncio.to_thread(deliver_file, token, chat_id, book)
     except Exception:
-        await message.reply_text("File delivery failed — direct link instead:\n" + url)
-        store.clear_session(user_id)
+        await message.reply_text(
+            "File delivery failed — direct link instead:\n" + url,
+            reply_markup=nav)
         return
-    await message.reply_text("✅ Sent (." + ext + "). Direct link:\n" + url)
-    store.clear_session(user_id)
+    await message.reply_text(
+        "✅ Sent (." + ext + "). Direct link:\n" + url, reply_markup=nav)
 
 
 async def _run_action(action, user_id, store, message, intent_result, raw_text):
@@ -191,6 +204,10 @@ async def _run_command(action, user_id, store, message, search_provider):
             await message.reply_text(agent_skills().summary_text())
         except Exception:
             await message.reply_text("🧠 Agent view unavailable right now.")
+        return
+    if action == "prompt_menu":
+        menu = forge_menu()
+        await message.reply_text(menu["text"], reply_markup=menu["reply_markup"])
         return
     if action.startswith("find:"):
         key = action.split(":", 1)[1]
@@ -316,7 +333,36 @@ async def handle_update(update, context, *, search_provider=None, store=None):
                     "Expired — tap /start and pick again.")
                 return
             await callback.answer("Sending link…" if mode == "l" else "Downloading…")
-            await _deliver(callback, user_id, store, book, mode)
+            await _deliver(callback, user_id, store, book, mode, sdata)
+            return
+        if data.startswith("dlb:"):
+            # post-delivery navigation: back to the same results, or search more
+            state, sdata = store.get_session(user_id)
+            results = sdata.get("results") if isinstance(sdata, dict) else None
+            token = sdata.get("search_token") if isinstance(sdata, dict) else None
+            action = data[4:]
+            if action == "more":
+                store.clear_session(user_id)
+                store.set_session(user_id, "MENU", {})
+                menu = home_menu()
+                await callback.answer("")
+                await callback.edit_message_text(menu["text"],
+                                                 reply_markup=menu["reply_markup"])
+                return
+            # back to results
+            if state != "CHOOSE_DELIVERY" or not (isinstance(results, list)
+                                                  and results and token):
+                await callback.answer("No results to go back to.", show_alert=True)
+                return
+            store.set_session(user_id, "SELECTING_BOOK",
+                              {"results": results, "search_token": token,
+                               "current_page": 0,
+                               "search_query": sdata.get("search_query", "")})
+            await callback.answer("")
+            await callback.edit_message_text(
+                "📚 Pick another from the same results, or use the buttons "
+                "below:",
+                reply_markup=build_search_keyboard(results, 0, token))
             return
         if data.startswith("mql5:"):
             # trending listing request: "mql5:mt5:ea" | "mql5:mt5:ind" | ...
@@ -444,6 +490,23 @@ async def handle_update(update, context, *, search_provider=None, store=None):
                 return
             await _send_repo_zip(update, user_id, store, items[index])
             return
+        if data.startswith("pf:"):
+            action = data[3:]
+            if action == "menu":
+                menu = forge_menu()
+                await callback.edit_message_text(menu["text"],
+                                                 reply_markup=menu["reply_markup"])
+                return
+            if action.startswith("cap:"):
+                key = action.split(":", 1)[1]
+                store.set_session(user_id, "FORGE_TOPIC", {"cap": key})
+                await callback.answer("")
+                await callback.edit_message_text(
+                    "🪄 Now describe the task you want this prompt to do "
+                    "(optionally add context on a 2nd line after a blank "
+                    "line). I'll forge a strong, evidence-first prompt.\n\n"
+                    "❌ Cancel to back out.")
+                return
         if data.startswith("fae:"):
             # "Show all ebooks" from a Find ALL result -> standard book list
             state, sdata = store.get_session(user_id)
@@ -560,7 +623,7 @@ async def handle_update(update, context, *, search_provider=None, store=None):
         if action is not None:
             if state in ("SELECTING_BOOK", "CHOOSE_DELIVERY",
                          "MQL5_LISTING", "AUTO_LISTING", "FIND_TOPIC",
-                         "FIND_RESULT"):
+                         "FIND_RESULT", "FORGE_TOPIC"):
                 store.clear_session(user_id)
             await _run_command(action, user_id, store, message,
                                search_provider)
@@ -577,6 +640,40 @@ async def handle_update(update, context, *, search_provider=None, store=None):
         return
     if text == "/help":
         await message.reply_text(HELP_TEXT)
+        return
+
+    # Prompt Forge: a typed goal answers the pending "describe the task" prompt
+    if state == "FORGE_TOPIC":
+        if text in ("/cancel", "cancel", "Cancel"):
+            store.clear_session(user_id)
+            await message.reply_text("Cancelled.")
+            return
+        parts = text.split("\n\n", 1)
+        goal = parts[0].strip()
+        context = parts[1].strip() if len(parts) > 1 else ""
+        if not goal:
+            await message.reply_text("Describe the task first — e.g. "
+                                     "\"build a daily report from my market "
+                                     "data\".")
+            return
+        cap = (_sdata.get("cap") if isinstance(_sdata, dict) else None) or "general"
+        await message.reply_text("🪄 Forging a strong prompt… (a moment)")
+        result = await asyncio.to_thread(forge_prompt, cap, goal, context)
+        if result is None:
+            store.clear_session(user_id)
+            await message.reply_text("Couldn't forge that — check the task "
+                                     "and try again.")
+            return
+        # Built-in agent: studying the domain of a prompt is study too.
+        try:
+            gained, level = agent_skills().record_search(
+                "prompt:" + result["capability"], 1, source="prompt")
+        except Exception:
+            gained, level = 0, 1
+        store.clear_session(user_id)
+        await message.reply_text(prompt_text(result),
+                                 disable_web_page_preview=True)
+        await message.reply_text("🧠 +" + str(gained) + " XP → L" + str(level))
         return
 
     # Find ALL: a typed topic answers the pending "What topic?" prompt
