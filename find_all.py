@@ -50,8 +50,12 @@ AI_TOPICS = [
      "hacking penetration testing security",
      "Web pentest: recon (subfinder -> httpx -> katana crawl -> ffuf fuzz) "
      "-> vuln scan (nuclei, sqlmap SQLi) -> exploit (Metasploit). Network: "
-     "nmap sweep. Mobile (apk) apps: jadx decompile -> frida/objection hook "
-     "at runtime. All open-source; run only on hosts you're authorised."),
+     "nmap sweep. Wireless: aircrack-ng — monitor mode (airmon-ng) -> "
+     "scan (airodump-ng) -> deauth-DOS the target AP (aireplay-ng "
+     "--deauth) or capture the WPA handshake (aircrack-ng). Mobile (apk) "
+     "apps: jadx decompile -> frida/objection hook at runtime. Wireless "
+     "needs a monitor-mode USB adapter + Kali/proot (not a Termux pkg). "
+     "All open-source; run only on hosts you're authorised."),
     ("reverse", "🔬 Reverse Engineering (apk)", "reverse engineering android apk",
      "reverse engineering decompiler",
      "Tear an apk/app down to see how it works: apktool/jadx unpack + "
@@ -187,6 +191,7 @@ CURATED_AI_REPOS = {
         ("projectdiscovery/subfinder", "Fast passive subdomain enumeration", 14630),
         ("nmap/nmap", "Nmap — the network mapper (port/service sweep)", 13836),
         ("projectdiscovery/httpx", "Fast multi-purpose HTTP toolkit (probe & fingerprint)", 10500),
+        ("aircrack-ng/aircrack-ng", "Wireless: monitor mode, scan, deauth-DOS & WPA handshake capture", 7793),
     ],
     "reverse": [
         ("NationalSecurityAgency/ghidra", "Ghidra — software reverse-engineering suite (disassembler)", 92179),
