@@ -61,8 +61,18 @@ _TERMUX_RE_INFO = {
         "[0:]> iz     # interesting strings\n"
         "[0:]> s main; pd 30\n"
         "r2 -q -d /system/bin/mediaserver   # debug a live process\n\n"
-        "Also bundled: rabin2 (binaries), radiff2 (diff two apks), "
-        "rasm2 (asm), rz find (search). No GUI needed — pure CLI."),
+        "PATCH (write opcodes/bytes, in place):\n"
+        "[0:]> wa add x0, x22, 0x20   # write/replace instruction at cursor\n"
+        "[0:]> wx 17 @ 0x4010   # write raw hexpair bytes at addr\n"
+        "[0:]> wao 'je' 'jne'   # modify a jump's condition in place\n"
+        "[0:]> /a add x0, x22   # search bytes BY assembly (find the insn)\n"
+        "[0:]> wc   # list write-changes (undo before saving)\n\n"
+        "ESIL (reason about what a patch does, no device):\n"
+        "[0:]> e emu.str=true; pd 20 @ fcn   # show reg/mem effect per insn\n\n"
+        "Memory maps (debugger mode, like MemTool):\n"
+        "[0:]> dm   # list maps; dm= bars; dmd dump region; dmh heap\n\n"
+        "Also bundled: rabin2, radiff2 (diff two apks), rasm2, rz find.\n"
+        "Full reference: book.rada.re (the radare2 book)."),
     "frida": (
         "🪝 Frida in Termux (instrument + hook a running app)\n\n"
         "pkg install python curl unzip\n"
