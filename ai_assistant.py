@@ -31,7 +31,6 @@ CATEGORIES = [
     ("econ", "📈 Economics", "economics"),
     ("psych", "🧩 Psychology", "psychology"),
     ("med", "🩺 Medicine", "medicine"),
-    ("fx", "💱 Forex Trading", "forex trading"),
 ]
 
 HOME_TEXT = (
@@ -95,7 +94,7 @@ HELP_TEXT = (
     "/webscam — download any website (scam check): info + tools\n"
     "/learn — learning skill + school programs: info + tools\n"
     "/agent — my skill level & what I've learned\n"
-    "/forex — forex trading books (CC)\n"
+    "/forex — forex trading: info + tools + books\n"
     "/android — android automation books\n"
     "/mql5 — trending EAs & indicators (MQL5)\n"
     "/tools — automation tools (hacking + Android)\n"
@@ -107,7 +106,7 @@ HELP_TEXT = (
 # command menu (setMyCommands — the bottom-left ⋮ menu) and router dispatch.
 BOT_COMMANDS = [
     ("start", "Open the main menu", "home"),
-    ("forex", "Forex trading books (CC)", "search:forex trading"),
+    ("forex", "Forex trading — info + tools + books", "find:forex"),
     ("hacking", "Hacking & pen-test — info + tools", "find:hacking"),
     ("reverse", "Reverse engineering (apk) — info + tools", "find:reverse"),
     ("termux", "Termux & chat automation — info + tools", "find:termux"),
@@ -228,6 +227,8 @@ def home_menu():
     rows.append([
         {"text": "🕸️ Download Site (Scam)", "callback_data": "fa:run:webscam"},
         {"text": "🎓 Learning & School", "callback_data": "fa:run:learn"}])
+    rows.append([
+        {"text": "💱 Forex (info+tools+books)", "callback_data": "fa:run:forex"}])
     rows.append([{"text": "🪄 Prompt Forge (any AI)", "callback_data": "pf:menu"}])
     rows.append([{"text": "🧠 Agent (level & learning)", "callback_data": "ui:agent"}])
     rows.append([{"text": "❓ How to use", "callback_data": "ui:help"}])

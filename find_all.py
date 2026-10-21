@@ -95,6 +95,15 @@ AI_TOPICS = [
      "widely used open LMS, Open edX powers edX — both give courses, "
      "assignments, grading, certificates for a class/family/kids. Pair a "
      "curriculum + LMS + Anki and you have a complete school."),
+    ("forex", "💱 Forex Trading (Info + Tools)", "forex trading bot backtest",
+     "forex trading",
+     "Forex = trading currency pairs (EUR/USD, GBP/USD, XAU/USD gold…). "
+     "Workflow: pick a broker + platform (MetaTrader 4/5) -> learn the "
+     "method (technical: RSI/MACD/moving averages + risk management: fixed "
+     "% risk, stop-loss, position sizing) -> BACKTEST before live (backtrader, "
+     "backtesting.py, Nautilus) -> automate with an EA (see /mql5 for "
+     "trending Expert Advisors + indicators). Open data: Twelve Data, OANDA. "
+     "Educational, not financial advice."),
 ]
 
 # Hand-verified top repos per AI sub-topic (study of GitHub search, 2026-10-20).
@@ -203,6 +212,14 @@ CURATED_AI_REPOS = {
         ("exercism/exercism", "Exercism — mentored coding practice in 60+ languages", 7594),
         ("moodle/moodle", "Moodle — the most widely used open-source LMS (build a school)", 7507),
         ("TheOdinProject/theodinproject", "The Odin Project — free full-stack web development path", 4662),
+    ],
+    "forex": [
+        ("freqtrade/freqtrade", "Free open-source trading bot (data, backtest, live, web UI)", 55680),
+        ("ccxt/ccxt", "Unified API for 100+ crypto/forex exchanges", 44491),
+        ("nautechsystems/nautilus_trader", "Production-grade Rust-native trading engine (deterministic backtest/live)", 30395),
+        ("mementum/backtrader", "Python backtesting library for trading strategies", 23529),
+        ("kernc/backtesting.py", "Backtest trading strategies in Python (fast, clear results)", 9090),
+        ("freqtrade/frequi", "Freqtrade web UI (strategy editor, backtest charts, live control)", 1097),
     ],
 }
 
