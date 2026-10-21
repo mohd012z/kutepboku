@@ -434,7 +434,7 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         update = self.message("/hacking")
         await handle_update(update, MagicMock(), store=self.store,
                             search_provider=self.provider(seen=seen))
-        self.assertEqual(seen, ["hacking penetration testing automation"])
+        self.assertEqual(seen, ["hacking penetration testing security"])
 
     async def test_command_android_searches(self):
         seen = []
@@ -447,6 +447,30 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         update = self.message("/mql5")
         await handle_update(update, MagicMock(), store=self.store)
         self.assertIn("MQL5 Code Base", update.message.reply_text.await_args.args[0])
+
+    async def test_fa_run_key_subtopic_resolves(self):
+        # Regression: fa:run:cloning used to fall through (== "run" exact
+        # match) so home sub-topic buttons did nothing.
+        seen = []
+        update = self.callback("fa:run:cloning")
+        await handle_update(update, MagicMock(), store=self.store,
+                            search_provider=self.provider(seen=seen))
+        self.assertIn("website cloning web scraping", seen)
+
+    async def test_reply_long_splits_overlimit(self):
+        from bot_router import _reply_long
+        sent = []
+        class M:
+            async def reply_text(self, text, **kwargs):
+                sent.append((text, kwargs))
+        big = "\n".join("line %d %s" % (i, "x" * 60) for i in range(120))
+        await _reply_long(M(), big, reply_markup={"k": 1})
+        self.assertGreater(len(sent), 1)  # was split
+        for text, kwargs in sent[:-1]:
+            self.assertLessEqual(len(text), 4000)
+            self.assertNotIn("reply_markup", kwargs)
+        self.assertIn("reply_markup", sent[-1][1])
+        self.assertEqual("\n".join(t for t, _ in sent), big)
 
     async def test_command_tools_shows_menu(self):
         update = self.message("/tools")
@@ -471,7 +495,7 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
     def test_bot_command_markup_shape(self):
         from ai_assistant import bot_command_markup
         commands = bot_command_markup()
-        self.assertEqual(len(commands), 14)
+        self.assertEqual(len(commands), 16)
         self.assertEqual(commands[0]["command"], "start")
         names = [c["command"] for c in commands]
         self.assertIn("find", names)

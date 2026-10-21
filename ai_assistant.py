@@ -63,6 +63,14 @@ HELP_TEXT = (
     "• 🪞 Web & App Cloning (/clone) — how website/app cloning works + the "
     "top cloner tools (one-command AI site-to-app, React rebuilders, Go "
     "cloner) + related ebooks.\n"
+    "• 🕵️ Hacking & Pen-Test (/hacking) — the recon→scan→exploit workflow + "
+    "top tools (Metasploit, SQLMap, Nuclei, Katana, ffuf, subfinder, Nmap, "
+    "httpx) + security ebooks.\n"
+    "• 🔬 Reverse Engineering /apk (/reverse) — how to tear an apk/app down "
+    "(jadx, apktool, Ghidra, Frida, objection) + related ebooks.\n"
+    "• 📱 Termux & Chat Automation (/termux) — script an Android phone from "
+    "Termux (uiautomator2, Airtest, ATX-Agent, scrcpy, Appium) — the "
+    "DANA-Kaget / earning-bot pattern.\n"
     "• 🧠 Agent — I'm a built-in AI agent that studies every search and "
     "levels up; open it to see my skill level, domains learned, and strongest "
     "topics.\n"
@@ -73,9 +81,11 @@ HELP_TEXT = (
     "/prompt — Prompt Forge (strong AI prompts for any capability)\n"
     "/marketing — AI advertising & marketing (ebooks + apps)\n"
     "/clone — web & app cloning: info + tools\n"
+    "/hacking — hacking & pen-test: info + tools\n"
+    "/reverse — reverse engineering (apk): info + tools\n"
+    "/termux — Termux & chat automation: info + tools\n"
     "/agent — my skill level & what I've learned\n"
     "/forex — forex trading books (CC)\n"
-    "/hacking — hacking automation books\n"
     "/android — android automation books\n"
     "/mql5 — trending EAs & indicators (MQL5)\n"
     "/tools — automation tools (hacking + Android)\n"
@@ -88,8 +98,9 @@ HELP_TEXT = (
 BOT_COMMANDS = [
     ("start", "Open the main menu", "home"),
     ("forex", "Forex trading books (CC)", "search:forex trading"),
-    ("hacking", "Hacking automation books",
-     "search:hacking penetration testing automation"),
+    ("hacking", "Hacking & pen-test — info + tools", "find:hacking"),
+    ("reverse", "Reverse engineering (apk) — info + tools", "find:reverse"),
+    ("termux", "Termux & chat automation — info + tools", "find:termux"),
     ("android", "Android automation books", "search:android automation"),
     ("mql5", "Trending EAs & indicators (MQL5)", "mql5_menu"),
     ("tools", "Automation tools (hacking + Android)", "auto_menu"),
@@ -194,6 +205,9 @@ def home_menu():
     rows.append([{"text": "🛠️ Automation Tools", "callback_data": "auto:menu"}])
     rows.append([{"text": "📣 AI Marketing", "callback_data": "fa:run:marketing"}])
     rows.append([{"text": "🪞 Web & App Cloning", "callback_data": "fa:run:cloning"}])
+    rows.append([{"text": "🕵️ Hacking & Pen-Test", "callback_data": "fa:run:hacking"}])
+    rows.append([{"text": "🔬 Reverse Engineering (apk)", "callback_data": "fa:run:reverse"}])
+    rows.append([{"text": "📱 Termux & Chat Automation", "callback_data": "fa:run:termux"}])
     rows.append([{"text": "🪄 Prompt Forge (any AI)", "callback_data": "pf:menu"}])
     rows.append([{"text": "🧠 Agent (level & learning)", "callback_data": "ui:agent"}])
     rows.append([{"text": "❓ How to use", "callback_data": "ui:help"}])
@@ -230,8 +244,8 @@ def mql5_menu():
 def auto_menu():
     from auto_scout import AUTO_TOOLS, AUTO_TEXT
     rows = [[{"text": "🔥 Trending on GitHub (right now)", "callback_data": "auto:trend"}]]
-    rows.append([{"text": "🕵️ Hacking Books", "callback_data": "ui:cat:hack"}])
-    rows.append([{"text": "🤖 Android Books", "callback_data": "ui:cat:android"}])
+    rows.append([{"text": "🕵️ Hacking & Pen-Test (info + tools)", "callback_data": "fa:run:hacking"}])
+    rows.append([{"text": "🤖 Android & Termux Automation (info + tools)", "callback_data": "fa:run:termux"}])
     for key, label, _repo in AUTO_TOOLS:
         rows.append([{"text": label[:60], "callback_data": "auto:tool:" + key}])
     rows.append([{"text": "🏠 Home", "callback_data": "ui:home"}])

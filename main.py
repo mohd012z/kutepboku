@@ -2,11 +2,13 @@
 import asyncio
 import logging
 import os
+import signal
 import time
 import time
 from pathlib import Path
 
 from telegram import InlineKeyboardMarkup, Update
+from telegram import error as tg_error
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
 from agent import BOT_NAME
@@ -155,6 +157,23 @@ async def status_command(update, context):
         await message.reply_text("Diagnostics unavailable. Check secure server logs.")
 
 
+def _poll_error(application, context):
+    """Keep the poller alive through transient errors. A Conflict means
+    another instance is using this token (restart race) — exit cleanly and
+    let the supervisor restart; any other update error is logged and ignored
+    so the bot never goes silent on one bad update."""
+    err = context.error
+    if isinstance(err, tg_error.Conflict):
+        log.warning("Conflict: another poller owns this token; exiting for "
+                    "supervisor restart")
+        try:
+            os.kill(os.getpid(), signal.SIGTERM)
+        except OSError:
+            pass
+        return
+    log.exception("Handling update failed: %s", err)
+
+
 def main():
     logging.basicConfig(level=logging.INFO)
     token = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -166,6 +185,7 @@ def main():
     if db.exists() and not verify_database_integrity(db):
         raise SystemExit("Existing session database failed integrity validation")
     application = ApplicationBuilder().token(token).post_init(verify_identity).build()
+    application.add_error_handler(_poll_error)
     application.add_handler(CommandHandler("backup", manual_backup_command))
     application.add_handler(CommandHandler("status", status_command))
     application.add_handler(CommandHandler("status", status_command))

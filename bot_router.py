@@ -75,6 +75,30 @@ def _is_allowed(user_id):
     return user_id in allowed
 
 
+async def _reply_long(message, text, **kwargs):
+    """Send text that may exceed Telegram's 4096-char limit by splitting on
+    newlines; only the final chunk carries reply_markup. Without this a long
+    reply raises BadRequest and kills the whole update (the prompt/clone
+    'nothing happens' bug)."""
+    limit = 4000  # stay safely under Telegram's 4096
+    if len(text) <= limit:
+        await message.reply_text(text, **kwargs)
+        return
+    chunks, cur = [], ""
+    for line in text.split("\n"):
+        piece = (cur + "\n" + line) if cur else line
+        if len(piece) > limit and cur:
+            chunks.append(cur)
+            cur = line
+        else:
+            cur = piece
+    if cur:
+        chunks.append(cur)
+    for chunk in chunks[:-1]:
+        await message.reply_text(chunk)
+    await message.reply_text(chunks[-1], **kwargs)
+
+
 async def _search_and_present(message, user_id, topic, store, search_provider):
     """Run the provider and show the paginated book list (or an explanation)."""
     if search_provider is None:
@@ -253,9 +277,9 @@ async def _run_find_all(message, user_id, store, search_provider,
     token = secrets.token_hex(6)
     store.set_session(user_id, "FIND_RESULT",
                       {"result": result, "fa_token": token})
-    await message.reply_text(find_all_message(result)
-                             + "\n\n🧠 +" + str(gained) + " XP → L" + str(level),
-                             reply_markup=find_all_keyboard(result, token))
+    await _reply_long(message, find_all_message(result)
+                      + "\n\n🧠 +" + str(gained) + " XP → L" + str(level),
+                      reply_markup=find_all_keyboard(result, token))
 
 
 async def _send_repo_zip(update, user_id, store, item):
@@ -560,7 +584,7 @@ async def handle_update(update, context, *, search_provider=None, store=None):
                 await callback.edit_message_text(menu["text"],
                                                  reply_markup=menu["reply_markup"])
                 return
-            if action == "run":
+            if action.startswith("run"):
                 key = None
                 if ":" in action:
                     key = action.split(":", 1)[1]
@@ -671,8 +695,8 @@ async def handle_update(update, context, *, search_provider=None, store=None):
         except Exception:
             gained, level = 0, 1
         store.clear_session(user_id)
-        await message.reply_text(prompt_text(result),
-                                 disable_web_page_preview=True)
+        await _reply_long(message, prompt_text(result),
+                          disable_web_page_preview=True)
         await message.reply_text("🧠 +" + str(gained) + " XP → L" + str(level))
         return
 

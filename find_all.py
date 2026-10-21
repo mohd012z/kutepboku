@@ -46,6 +46,25 @@ AI_TOPICS = [
      "structure -> compare to the original. AI-agent tools do this in one "
      "command (static or React); scrapers (Playwright/Scrapling) feed them. "
      "Always check the site's ToS before reusing assets."),
+    ("hacking", "🕵️ Hacking & Pen-Test", "hacking",
+     "hacking penetration testing security",
+     "Web pentest: recon (subfinder -> httpx -> katana crawl -> ffuf fuzz) "
+     "-> vuln scan (nuclei, sqlmap SQLi) -> exploit (Metasploit). Network: "
+     "nmap sweep. Mobile (apk) apps: jadx decompile -> frida/objection hook "
+     "at runtime. All open-source; run only on hosts you're authorised."),
+    ("reverse", "🔬 Reverse Engineering (apk)", "reverse engineering android apk",
+     "reverse engineering decompiler",
+     "Tear an apk/app down to see how it works: apktool/jadx unpack + "
+     "decompile (smali/java), Ghidra disassembles native .so libs, "
+     "frida/objection hook + explore at runtime, qbundler for React-Native. "
+     "Recompile with apktool to test patched smali/dex."),
+    ("termux", "📱 Termux & Chat Automation", "android ui automation",
+     "android automation uiautomator",
+     "Script an Android phone from a Termux shell: uiautomator2 taps/swipes "
+     "by selector, airtest matches by screenshot, ATX-Agent + scrcpy mirror "
+     "and control, Appium drives iOS+Android cross-platform. The pattern for "
+     "DANA-Kaget / CapCut / earning-game auto-claim bots shared in Termux "
+     "script channels."),
 ]
 
 # Hand-verified top repos per AI sub-topic (study of GitHub search, 2026-10-20).
@@ -103,6 +122,31 @@ CURATED_AI_REPOS = {
         ("goclone-dev/goclone", "Website cloner using Go routines", 2286),
         ("Jane-xiaoer/claude-skill-web-clone", "Methodology for faithfully cloning any website (static/React)", 1065),
         ("boyang-hu/website-rebuild-skill", "Agent skill: mirror, line-by-line rebuild, auto-compare", 1539),
+    ],
+    "hacking": [
+        ("rapid7/metasploit-framework", "Metasploit: the standard penetration-testing framework", 39195),
+        ("sqlmapproject/sqlmap", "Automatic SQL injection & database takeover", 38753),
+        ("projectdiscovery/nuclei", "Fast, template-driven vulnerability scanner", 32168),
+        ("projectdiscovery/katana", "Next-gen crawling & spidering framework", 17698),
+        ("ffuf/ffuf", "Fast web fuzzer written in Go", 16922),
+        ("projectdiscovery/subfinder", "Fast passive subdomain enumeration", 14630),
+        ("nmap/nmap", "Nmap — the network mapper (port/service sweep)", 13836),
+        ("projectdiscovery/httpx", "Fast multi-purpose HTTP toolkit (probe & fingerprint)", 10500),
+    ],
+    "reverse": [
+        ("NationalSecurityAgency/ghidra", "Ghidra — software reverse-engineering suite (disassembler)", 92179),
+        ("skylot/jadx", "DEX → Java decompiler for Android", 51133),
+        ("iBotPeaches/apktool", "Reverse-engineer, decompile & recompile Android apk", 26386),
+        ("frida/frida", "Frida — dynamic instrumentation / runtime hooking", 22397),
+        ("appium/appium", "Cross-platform mobile automation (also drives RE'd apps)", 22114),
+        ("sensepost/objection", "Runtime mobile exploration for iOS/Android (Frida-based)", 9453),
+    ],
+    "termux": [
+        ("Genymobile/scrcpy", "Display & control an Android device over USB/Wi-Fi", 152663),
+        ("airtestproject/airtest", "Image+touch UI automation for games & apps (by Tencent)", 9612),
+        ("openatx/uiautomator2", "Android UI automation via Python (taps/swipes by selector)", 8433),
+        ("appium/appium", "Cross-platform mobile automation (iOS + Android)", 22114),
+        ("openatx/ATX-Agent", "HTTP daemon running on the Android device for automation", 802),
     ],
 }
 
