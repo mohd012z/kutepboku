@@ -1,8 +1,14 @@
-name: msasoup daily delivery
+name: Ebook Scout Agent & Maintenance
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 */4 * * *'
   workflow_dispatch:
+    inputs:
+      search_query:
+        description: 'Custom licensed ebook search query'
+        required: false
+        default: 'python programming'
+        type: string
 permissions:
   contents: write
 concurrency:
@@ -23,21 +29,11 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          CUSTOM_QUERY: ${{ github.event_name == 'workflow_dispatch' && inputs.search_query || '' }}
           SCOUT_QUERY: ${{ vars.SCOUT_QUERY || 'python programming' }}
         run: python agent.py
-      # This hook backs up only files present on THIS runner.
-      # Persistent bot_sessions.db must be backed up on its actual host.
-      # cloud_backup.py is not yet committed; opt-in is disabled by default.
-      - name: Optional runner-scoped backup
-        if: ${{ vars.ENABLE_RUNNER_BACKUP == 'true' }}
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_BACKUP_CHANNEL_ID: ${{ secrets.TELEGRAM_BACKUP_CHANNEL_ID }}
-          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
-        run: |
-          test -f cloud_backup.py || { echo 'cloud_backup.py is not implemented'; exit 1; }
-          test -n "$BACKUP_ENCRYPTION_KEY" || { echo 'Backup encryption key missing'; exit 1; }
-          python cloud_backup.py
+      # The scheduled scout does not operate the persistent polling database.
+      # Backup and recovery must run on the host owning that database.
       - name: Persist history
         run: |
           if [ -f state/history.json ]; then
