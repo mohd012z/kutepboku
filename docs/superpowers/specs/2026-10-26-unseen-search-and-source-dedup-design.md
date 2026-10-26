@@ -21,7 +21,7 @@ Repeated searches should prioritize relevant results the requesting user has not
 2. No duplicate canonical GitHub repository within a result set, regardless of case, URL shape, or curated/live overlap.
 3. One source search per source + normalized query + search parameters per operation; concurrent identical requests share one in-flight operation. IA metadata for the same identifier is fetched at most once within that operation.
 4. Repeat searches show unseen *relevant and licensed* results first, per user and across entry commands. A shortfall must be explained, not filled with irrelevant or forbidden content.
-5. Only records actually displayed to the user count as seen: opening the first page marks its items; moving pages marks the newly displayed page. Fetching a candidate pool does not mark its undisplayed items.
+5. Only records actually displayed to the user count as seen: opening the first page marks its items; moving pages marks the newly displayed page. Fetching a candidate pool does not mark its undisplayed items. Seen identity is **per user across all topics and commands**; query-specific history is stored separately.
 6. A `Previous results` action lets users revisit exact historical result sets and pages; viewing history does not consume new results.
 7. Search categories keep meaningful command-specific outputs: ebook search, Find ALL (books + apps), MQL5 source, automation tools, and prompt generation remain distinct.
 8. All existing rights checks, user allowlists, callback ownership checks, file-type and size limits, and fallback behavior remain intact.
@@ -56,7 +56,7 @@ New `search_identity.py`:
 New `search_coordinator.py`, called by the existing `search_provider.verified_search` and Find ALL app retrieval:
 
 - A request context memoizes calls by `(source, normalized_query, stable_parameters)` and IA metadata by identifier, with thread-safe single-flight execution. An empty successful response can be cached; exceptions must not poison the cache or turn licensing failure into success.
-- Persistent, bounded SQLite source cache contains only public discovery metadata (no credentials, chat IDs, or private messages). Default positive TTL **30 minutes**, empty-success TTL **10 minutes**, IA licensing metadata TTL **30 minutes**; maximum cache entries **2,000** with oldest-expiry eviction. These are tunable configuration defaults.
+- Persistent, bounded SQLite source cache contains only public discovery metadata (no credentials, chat IDs, private messages, or raw user queries). Cache keys use a one-way SHA-256 hash of normalized query + source + parameters; raw free-text queries are never part of shared cache keys or logs. Default positive TTL **30 minutes**, empty-success TTL **10 minutes**, IA licensing metadata TTL **30 minutes**; maximum cache entries **2,000** with oldest-expiry eviction. These are tunable configuration defaults.
 - Explicit `Refresh sources` invalidates the query's expired/stale candidate cache and queries each source at most once again; refresh is user-triggered, never a silent immediate retry loop.
 - Source calls remain isolated: one unavailable provider does not suppress eligible results from others. License gates are applied on every candidate before display/delivery; cached rights evidence expires and is revalidated.
 - Do not merge a provider's error into an empty successful response; preserve source-error status in diagnostic metrics.
@@ -65,12 +65,12 @@ New `search_coordinator.py`, called by the existing `search_provider.verified_se
 
 Extend `session_manager.py` with independent, additive tables (`user_sessions` remains compatible):
 
-- `search_seen(user_id, item_type, item_key, first_shown_at, last_shown_at, query_key)`, unique by user/type/key/query; retain 90 days.
+- `search_seen(user_id, item_type, item_key, first_shown_at, last_shown_at, last_query_hash)`, **unique by user/type/key globally across commands and queries**; retain 90 days. The query hash is optional diagnostic metadata, not part of seen-item identity.
 - `search_history(user_id, history_id, query_key, search_route, result_snapshot_json, created_at)`; retain last 20 batches or 30 days per user.
 - `mark_displayed(user_id, query_key, results)` atomically inserts only the current visible page, never every fetched candidate. Ensure repeated callbacks are idempotent.
-- `recently_seen(user_id, item_type, query_key)` and `list_history(user_id, ...)` are strictly scoped to that user. Never allow one user's callback token or history ID to access another user's batches.
+- `recently_seen(user_id, item_type)` (global item ledger) and `list_history(user_id, ...)` (query-specific batches) are strictly scoped to that user. Never allow one user's callback token or history ID to access another user's batches.
 - New search ranking: licensed and relevant candidates first; within equivalent relevance, unseen before previously seen; a small source-diversity tie-breaker prevents a first page dominated by one provider where other valid sources exist.
-- If fewer than three unseen eligible items remain, show only the new items and a clear `No more new verified results` note; offer `Previous results` and optional `Refresh sources`. Never silently recycle old items as if new.
+- If fewer than three unseen eligible items remain, show only the new items and a clear `No more new verified results` note; offer `Previous results`, optional `Refresh sources`, and a user-only `Clear search history` action. Never silently recycle old items as if new. Clearing history deletes that user's seen and batch rows without touching shared public source cache.
 - Historical batch replay restores the exact previous order without incrementing XP or seen counts.
 
 ### 4. Router and command integration
@@ -109,7 +109,7 @@ Offline unit/integration tests must cover:
 2. Distinct editions/unknown authors remain separate when there is no strong identity evidence.
 3. Case-varied GitHub repo names from curated/live lists collapse to one entry.
 4. First-page and later-page seen accounting; repeated identical query rotates unseen; already-exhausted query never masquerades old as new.
-5. History returns exact prior order and respects user ownership, stale token, restart and retention.
+5. History returns exact prior order and respects user ownership, stale token, restart, retention, and the per-user clear-history action.
 6. Two simultaneous identical source searches single-flight; TTL hit, expiry, refresh and provider failure.
 7. /find distinct combined output; /mql5 and automation routes unaffected; LLM unavailable retains relevant rights-checked results.
 8. Old session DB upgrades without losing sessions; invalid/corrupt DB handling remains safe; backup/restore regression remains green.
