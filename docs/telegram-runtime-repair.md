@@ -70,3 +70,8 @@ were substituted for the available interpreter. The real deployment paths,
 service user, credentials, host reboot/restart behavior, ledger freshness, and
 live Telegram replies remain **unverified**. No paid service was enabled and no
 production webhook or deployment was changed.
+
+## Hybrid operation
+
+See [telegram-hybrid.md](telegram-hybrid.md) for the selected listener + Actions
+roles, cutover, boundaries, limits and live acceptance gates.

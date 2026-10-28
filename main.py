@@ -66,7 +66,20 @@ async def telegram_handler(update, context):
         message = MessageProxy(update.effective_message) if update.message else None
         callback_query = CallbackProxy(callback) if callback else None
 
-    await handle_update(UpdateProxy(), context, search_provider=verified_search)
+    await route_update(UpdateProxy(), context)
+
+
+async def route_update(update, context, *, handler=handle_update):
+    """Keep each user's session ordered while allowing status/other users to progress."""
+    user = getattr(update, 'effective_user', None)
+    allowed = {part.strip() for part in os.getenv('TELEGRAM_ALLOWED_USER_IDS', '').split(',')}
+    if user is None or str(user.id) not in allowed:
+        return await handler(update, context, search_provider=verified_search)
+    # Only allowlisted users allocate locks; no unauthenticated memory growth.
+    locks = context.application.bot_data.setdefault('router_locks', {})
+    lock = locks.setdefault(user.id, asyncio.Lock())
+    async with lock:
+        return await handler(update, context, search_provider=verified_search)
 
 
 async def verify_identity(application):
@@ -129,7 +142,7 @@ async def polling_error(update, context):
 
 
 def build_application(token):
-    application = ApplicationBuilder().token(token).post_init(verify_identity).build()
+    application = ApplicationBuilder().token(token).concurrent_updates(8).post_init(verify_identity).build()
     application.add_handler(CommandHandler("backup", manual_backup_command))
     application.add_handler(CommandHandler("status", status_command))
     application.add_handler(CallbackQueryHandler(telegram_handler, pattern=r"^sr:"))

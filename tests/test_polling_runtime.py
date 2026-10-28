@@ -1,4 +1,5 @@
 import tempfile
+import asyncio
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,6 +11,27 @@ from runtime_guard import polling_lock
 
 
 class StartupTests(unittest.IsolatedAsyncioTestCase):
+    async def test_same_user_sessions_are_serialized_while_other_users_can_progress(self):
+        context = SimpleNamespace(application=SimpleNamespace(bot_data={}))
+        started, release = asyncio.Event(), asyncio.Event()
+        seen = []
+        async def handler(update, context, **kwargs):
+            seen.append(update.label)
+            if update.label == 'first':
+                started.set()
+                await release.wait()
+        with patch.dict('os.environ', {'TELEGRAM_ALLOWED_USER_IDS': '1,2'}, clear=True):
+            first = asyncio.create_task(main.route_update(
+                SimpleNamespace(effective_user=SimpleNamespace(id=1), label='first'), context, handler=handler))
+            await started.wait()
+            second = asyncio.create_task(main.route_update(
+                SimpleNamespace(effective_user=SimpleNamespace(id=1), label='second'), context, handler=handler))
+            await main.route_update(SimpleNamespace(effective_user=SimpleNamespace(id=2), label='other'), context, handler=handler)
+            self.assertEqual(seen, ['first', 'other'])
+            release.set()
+            await asyncio.gather(first, second)
+            self.assertEqual(seen, ['first', 'other', 'second'])
+
     async def test_active_webhook_is_preserved(self):
         bot = SimpleNamespace(get_me=AsyncMock(return_value=SimpleNamespace(
             is_bot=True, username=main.BOT_NAME)),
@@ -53,6 +75,7 @@ class ConfigurationTests(unittest.TestCase):
         status_handlers = [handler for group in application.handlers.values()
                            for handler in group if 'status' in getattr(handler, 'commands', [])]
         self.assertEqual(len(status_handlers), 1)
+        self.assertEqual(application.concurrent_updates, 8)
         self.assertIn(main.polling_error, application.error_handlers)
 
 
