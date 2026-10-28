@@ -1,0 +1,32 @@
+[Unit]
+Description=kutepboku persistent Telegram listener
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=telegram-bots
+Group=telegram-bots
+WorkingDirectory=/opt/telegram-bots/kutepboku
+EnvironmentFile=/etc/telegram-bots/kutepboku.env
+Environment=PYTHONUNBUFFERED=1
+Environment=BOT_DB_PATH=/var/lib/telegram-msasoup/bot_sessions.db
+Environment=TELEGRAM_LOCK_PATH=/var/lib/telegram-msasoup/poller.lock
+StateDirectory=telegram-msasoup
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=/opt/telegram-bots/kutepboku/.venv/bin/python main.py
+Restart=on-failure
+RestartSec=10
+RestartPreventExitStatus=78
+TimeoutStopSec=90
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/telegram-bots/kutepboku/logs
+
+[Install]
+WantedBy=multi-user.target
