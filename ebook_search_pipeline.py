@@ -216,8 +216,10 @@ def openlicensed_search(query, *, client=requests, relevance_checker=None,
                 "title": str(doc.get("title") or "Untitled")[:180],
                 "link": link}
 
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        eligible = [item for item in pool.map(_eligible, docs) if item is not None]
+    # Bound concurrent metadata lookups to limit orphaned background work when
+    # the Telegram request times out. Preserve input ordering for stable results.
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        eligible = [item for item in pool.map(_eligible, docs[:metadata_cap]) if item is not None]
 
     if relevance_checker is not None:
         indices = relevance_checker(query, [item["title"] for item in eligible])
