@@ -70,7 +70,10 @@ async def verify_identity(application):
     me = await application.bot.get_me()
     if not me.is_bot or (me.username or "").lower() != BOT_NAME:
         raise RuntimeError("Telegram bot identity mismatch")
-    log.info("Verified bot @%s", me.username)
+    webhook = await application.bot.get_webhook_info()
+    if webhook.url:
+        raise RuntimeError("Polling refused: Telegram webhook is configured; remove it explicitly before starting a polling consumer")
+    log.info("Verified bot @%s; no webhook configured", me.username)
 
 
 async def manual_backup_command(update, context):
