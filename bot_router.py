@@ -35,7 +35,8 @@ async def handle_update(update, context, *, search_provider=None, store=None):
     if callback is not None:
         result = process_search_callback(
             user_id, callback.data, load_session=store.get_session,
-            save_session=store.set_session, clear_session=store.clear_session)
+            save_session=store.set_session, clear_session=store.clear_session,
+            compare_and_set=getattr(store, "compare_and_set_session", None))
         await callback.answer("" if result["ok"] else result["error"],
                               show_alert=not result["ok"])
         if not result["ok"]:
