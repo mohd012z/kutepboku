@@ -1,0 +1,39 @@
+name: MSASoup Cloudflare staging validation
+on:
+  pull_request:
+    paths:
+      - 'cloudflare/**'
+      - '.github/workflows/msasoup-cloudflare-staging.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: msasoup-cloudflare-staging-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate staging source
+        run: |
+          test -f cloudflare/package.json
+          test -f cloudflare/src/index.js
+          test -f cloudflare/bridge/runner.py
+          node --check cloudflare/src/index.js
+          python -m py_compile cloudflare/bridge/runner.py
+      - name: Run Worker tests
+        working-directory: cloudflare
+        run: npm test
+      - name: Run Python bridge tests
+        run: python -m unittest discover -s cloudflare/bridge -p 'test_*.py' -v
+      - name: Confirm no production deployment
+        run: |
+          echo 'Validation only: no Wrangler deploy, no Telegram webhook mutation, no billing actions.'
