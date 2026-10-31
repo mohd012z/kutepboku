@@ -57,6 +57,9 @@ async def handle_update(update, context, *, search_provider=None, store=None):
         store.clear_session(user_id)
         await message.reply_text("Cancelled.")
         return
+    if text == "/help":
+        await message.reply_text("Commands: /start, /cancel, /help")
+        return
     if text == "/start":
         store.set_session(user_id, "WAITING_FOR_QUERY", {})
         await message.reply_text("Welcome to kutepboku. Send an eBook search topic.")
@@ -64,6 +67,12 @@ async def handle_update(update, context, *, search_provider=None, store=None):
     state, _ = store.get_session(user_id)
     if state != "WAITING_FOR_QUERY" or not text:
         await message.reply_text("Send /start to begin a search.")
+        return
+    if text.startswith("/"):
+        await message.reply_text("Unknown command. Send /help.")
+        return
+    if len(text) > 200:
+        await message.reply_text("Search query exceeds 200 characters.")
         return
     if search_provider is None:
         await message.reply_text("Search is not configured yet.")
