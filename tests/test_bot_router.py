@@ -170,6 +170,25 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.store.compare_and_set_session(
             12345, "IDLE", {}, "SELECTING_BOOK", {"page": 0}))
 
+    async def test_atomic_callback_rejects_stale_update(self):
+        from search_pagination import process_search_callback
+        self.store.set_session(12345, "SELECTING_BOOK", {
+            "results": [{"id": "book_1", "title": "Test"}],
+            "search_token": "abcdef123456", "current_page": 0})
+        def stale_compare(*args):
+            self.store.set_session(12345, "SELECTING_BOOK", {
+                "results": [{"id": "book_1", "title": "Test"}],
+                "search_token": "abcdef123456", "current_page": 1})
+            return self.store.compare_and_set_session(*args)
+        result = process_search_callback(
+            12345, "sr:b:abcdef123456:book_1",
+            load_session=self.store.get_session,
+            save_session=self.store.set_session,
+            clear_session=self.store.clear_session,
+            compare_and_set=stale_compare)
+        self.assertFalse(result["ok"])
+        self.assertEqual(self.store.get_session(12345)[0], "SELECTING_BOOK")
+
     async def test_cancel_clears_session(self):
         self.store.set_session(12345, "SELECTING_BOOK", {"results": []})
         await handle_update(self.message("/cancel"), MagicMock(), store=self.store)
