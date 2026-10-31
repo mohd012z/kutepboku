@@ -74,6 +74,37 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
             await handle_update(update, MagicMock(), store=self.store, search_provider=provider)
         update.message.reply_text.assert_not_awaited()
 
+    async def test_search_timeout_replies(self):
+        import asyncio
+        self.store.set_session(12345, "WAITING_FOR_QUERY", {})
+        async def provider(query):
+            raise asyncio.TimeoutError()
+        update = self.message("topic")
+        await handle_update(update, MagicMock(), store=self.store, search_provider=provider)
+        update.message.reply_text.assert_awaited_once_with(
+            "Search timed out. Please try again later.")
+
+    async def test_help_without_session(self):
+        update = self.message("/help")
+        await handle_update(update, MagicMock(), store=self.store)
+        update.message.reply_text.assert_awaited_once_with("Commands: /start, /cancel, /help")
+
+    async def test_long_query_not_sent_to_provider(self):
+        self.store.set_session(12345, "WAITING_FOR_QUERY", {})
+        provider = AsyncMock()
+        update = self.message("x" * 201)
+        await handle_update(update, MagicMock(), store=self.store, search_provider=provider)
+        provider.assert_not_awaited()
+        update.message.reply_text.assert_awaited_once_with("Search query exceeds 200 characters.")
+
+    async def test_unknown_command_not_searched(self):
+        self.store.set_session(12345, "WAITING_FOR_QUERY", {})
+        provider = AsyncMock()
+        update = self.message("/unknown")
+        await handle_update(update, MagicMock(), store=self.store, search_provider=provider)
+        provider.assert_not_awaited()
+        update.message.reply_text.assert_awaited_once_with("Unknown command. Send /help.")
+
     async def test_selection_callback(self):
         self.store.set_session(12345, "SELECTING_BOOK", {
             "results": [{"id": "book_1", "title": "Test book"}],
