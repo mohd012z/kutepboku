@@ -1,10 +1,13 @@
 """Async Telegram update router with injected, verified search results."""
+import asyncio
+import logging
 import os
 import secrets
 
 from session_manager import SessionManager
 from search_pagination import build_search_keyboard, new_search_session, process_search_callback
 
+log = logging.getLogger(__name__)
 db = None
 
 
@@ -65,7 +68,14 @@ async def handle_update(update, context, *, search_provider=None, store=None):
     if search_provider is None:
         await message.reply_text("Search is not configured yet.")
         return
-    results = await search_provider(text)
+    try:
+        results = await search_provider(text)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("Verified search failed")
+        await message.reply_text("Search is temporarily unavailable. Please try again later.")
+        return
     if not isinstance(results, list) or not results:
         await message.reply_text("No verified books found.")
         return
