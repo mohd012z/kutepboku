@@ -189,6 +189,27 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(self.store.get_session(12345)[0], "SELECTING_BOOK")
 
+    async def test_competing_atomic_writers_only_one_wins(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        first = SessionManager(Path(self.temp.name) / "sessions.db")
+        second = SessionManager(Path(self.temp.name) / "sessions.db")
+        first.set_session(12345, "SELECTING_BOOK", {"page": 0})
+        gate = Barrier(2)
+        def attempt(manager, page):
+            gate.wait(timeout=5)
+            return manager.compare_and_set_session(
+                12345, "SELECTING_BOOK", {"page": 0},
+                "SELECTING_BOOK", {"page": page})
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            one = pool.submit(attempt, first, 1)
+            two = pool.submit(attempt, second, 2)
+            outcomes = [one.result(timeout=10), two.result(timeout=10)]
+        self.assertEqual(sorted(outcomes), [False, True])
+        state, data = self.store.get_session(12345)
+        self.assertEqual(state, "SELECTING_BOOK")
+        self.assertIn(data["page"], (1, 2))
+
     async def test_cancel_clears_session(self):
         self.store.set_session(12345, "SELECTING_BOOK", {"results": []})
         await handle_update(self.message("/cancel"), MagicMock(), store=self.store)
