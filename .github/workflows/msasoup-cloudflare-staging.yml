@@ -34,6 +34,24 @@ jobs:
         run: npm test
       - name: Run Python bridge tests
         run: python -m unittest discover -s cloudflare/bridge -p 'test_*.py' -v
+      - name: Validate D1 migrations offline
+        run: |
+          python - <<'PY'
+          import sqlite3
+          from pathlib import Path
+          db=sqlite3.connect(':memory:')
+          db.execute('PRAGMA foreign_keys=ON')
+          migrations=sorted(Path('cloudflare/migrations').glob('*.sql'))
+          assert len(migrations)==5, f'Expected 5 migrations, found {len(migrations)}'
+          for migration in migrations:
+              db.executescript(migration.read_text())
+          tables={row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+          assert {'jobs','outbox','webhook_inbox','sessions','telegram_updates'} <= tables
+          db.execute("INSERT INTO jobs(user_id,chat_id,topic) VALUES(1,1,'test')")
+          db.execute("INSERT INTO outbox(job_id,chat_id,payload,status) VALUES(1,1,'test','uncertain')")
+          db.execute("INSERT INTO webhook_inbox(update_id,payload) VALUES(1,'{}')")
+          print('All five migrations and staging data invariants PASS')
+          PY
       - name: Confirm no production deployment
         run: |
           echo 'Validation only: no Wrangler deploy, no Telegram webhook mutation, no billing actions.'
