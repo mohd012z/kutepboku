@@ -69,9 +69,13 @@ async def handle_update(update, context, *, search_provider=None, store=None):
         await message.reply_text("Search is not configured yet.")
         return
     try:
-        results = await search_provider(text)
+        results = await asyncio.wait_for(search_provider(text), timeout=20)
     except asyncio.CancelledError:
         raise
+    except asyncio.TimeoutError:
+        log.warning("Verified search timed out")
+        await message.reply_text("Search timed out. Please try again later.")
+        return
     except Exception:
         log.exception("Verified search failed")
         await message.reply_text("Search is temporarily unavailable. Please try again later.")
