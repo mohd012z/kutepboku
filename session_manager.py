@@ -39,3 +39,19 @@ class SessionManager:
     def clear_session(self, user_id):
         with self._connect() as conn:
             conn.execute("DELETE FROM user_sessions WHERE user_id=?", (int(user_id),))
+
+    def compare_and_set_session(self, user_id, expected_state, expected_data, new_state, new_data):
+        """Atomically update only if the session still matches its snapshot.
+
+        Returns False if another callback changed or removed the session.
+        """
+        expected_payload = json.dumps(expected_data, ensure_ascii=False)
+        new_payload = json.dumps(new_data, ensure_ascii=False)
+        stamp = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """UPDATE user_sessions SET state=?, data=?, updated_at=?
+                   WHERE user_id=? AND state=? AND data=?""",
+                (str(new_state), new_payload, stamp, int(user_id),
+                 str(expected_state), expected_payload))
+            return cursor.rowcount == 1
