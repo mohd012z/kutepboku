@@ -131,6 +131,30 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.store.get_session(999)[0], "IDLE")
         update.message.reply_text.assert_not_awaited()
 
+    async def test_other_user_callback_cannot_use_owned_session(self):
+        self.store.set_session(12345, "SELECTING_BOOK", {
+            "results": [{"id": "book_1", "title": "Test"}],
+            "search_token": "abcdef123456", "current_page": 0})
+        with patch.dict(os.environ, {"TELEGRAM_ALLOWED_USER_IDS": "12345,54321"}):
+            update = self.callback("sr:b:abcdef123456:book_1", user_id=54321)
+            await handle_update(update, MagicMock(), store=self.store)
+        self.assertEqual(self.store.get_session(12345)[0], "SELECTING_BOOK")
+        self.assertEqual(self.store.get_session(54321)[0], "IDLE")
+        update.callback_query.edit_message_text.assert_not_awaited()
+
+    async def test_unauthorized_callback_denied(self):
+        update = self.callback("sr:b:abcdef123456:book_1", user_id=999)
+        await handle_update(update, MagicMock(), store=self.store)
+        update.callback_query.answer.assert_awaited_once_with(
+            "Not authorized", show_alert=True)
+        update.callback_query.edit_message_text.assert_not_awaited()
+
+    async def test_session_survives_manager_recreation(self):
+        self.store.set_session(12345, "WAITING_FOR_QUERY", {"source": "test"})
+        reopened = SessionManager(Path(self.temp.name) / "sessions.db")
+        self.assertEqual(reopened.get_session(12345),
+                         ("WAITING_FOR_QUERY", {"source": "test"}))
+
     async def test_cancel_clears_session(self):
         self.store.set_session(12345, "SELECTING_BOOK", {"results": []})
         await handle_update(self.message("/cancel"), MagicMock(), store=self.store)
