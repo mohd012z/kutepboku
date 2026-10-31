@@ -155,6 +155,21 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reopened.get_session(12345),
                          ("WAITING_FOR_QUERY", {"source": "test"}))
 
+    async def test_compare_and_set_rejects_stale_snapshot(self):
+        self.store.set_session(12345, "SELECTING_BOOK", {"page": 0})
+        self.assertTrue(self.store.compare_and_set_session(
+            12345, "SELECTING_BOOK", {"page": 0},
+            "SELECTING_BOOK", {"page": 1}))
+        self.assertFalse(self.store.compare_and_set_session(
+            12345, "SELECTING_BOOK", {"page": 0},
+            "CHOOSE_DELIVERY", {"book": "wrong"}))
+        self.assertEqual(self.store.get_session(12345),
+                         ("SELECTING_BOOK", {"page": 1}))
+
+    async def test_compare_and_set_rejects_missing_session(self):
+        self.assertFalse(self.store.compare_and_set_session(
+            12345, "IDLE", {}, "SELECTING_BOOK", {"page": 0}))
+
     async def test_cancel_clears_session(self):
         self.store.set_session(12345, "SELECTING_BOOK", {"results": []})
         await handle_update(self.message("/cancel"), MagicMock(), store=self.store)
