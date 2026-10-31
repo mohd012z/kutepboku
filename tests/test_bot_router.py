@@ -54,6 +54,26 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(data["results"]), 1)
         update.message.reply_text.assert_awaited_once()
 
+    async def test_search_failure_reports_temporary_error(self):
+        self.store.set_session(12345, "WAITING_FOR_QUERY", {})
+        async def provider(query):
+            raise RuntimeError("simulated upstream failure")
+        update = self.message("test query")
+        await handle_update(update, MagicMock(), store=self.store, search_provider=provider)
+        update.message.reply_text.assert_awaited_once_with(
+            "Search is temporarily unavailable. Please try again later.")
+        self.assertEqual(self.store.get_session(12345)[0], "WAITING_FOR_QUERY")
+
+    async def test_search_cancellation_propagates(self):
+        import asyncio
+        self.store.set_session(12345, "WAITING_FOR_QUERY", {})
+        async def provider(query):
+            raise asyncio.CancelledError()
+        update = self.message("test query")
+        with self.assertRaises(asyncio.CancelledError):
+            await handle_update(update, MagicMock(), store=self.store, search_provider=provider)
+        update.message.reply_text.assert_not_awaited()
+
     async def test_selection_callback(self):
         self.store.set_session(12345, "SELECTING_BOOK", {
             "results": [{"id": "book_1", "title": "Test book"}],
