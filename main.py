@@ -3,7 +3,6 @@ import asyncio
 import logging
 import os
 import time
-import time
 from pathlib import Path
 
 from telegram import InlineKeyboardMarkup, Update
@@ -14,9 +13,6 @@ from cloud_backup import backup_database_snapshot
 from bot_router import handle_update
 from restore_db import verify_database_integrity
 from search_provider import verified_search
-from status_metrics import format_status, status_snapshot
-
-STARTED_AT = time.monotonic()
 from status_metrics import format_status, status_snapshot
 
 PROCESS_STARTED_AT = time.monotonic()
@@ -74,7 +70,10 @@ async def verify_identity(application):
     me = await application.bot.get_me()
     if not me.is_bot or (me.username or "").lower() != BOT_NAME:
         raise RuntimeError("Telegram bot identity mismatch")
-    log.info("Verified bot @%s", me.username)
+    webhook = await application.bot.get_webhook_info()
+    if webhook.url:
+        raise RuntimeError("Polling refused: Telegram webhook is configured; remove it explicitly before starting a polling consumer")
+    log.info("Verified bot @%s; no webhook configured", me.username)
 
 
 async def manual_backup_command(update, context):
@@ -99,25 +98,6 @@ async def manual_backup_command(update, context):
 
 
 async def status_command(update, context):
-    """Private-chat admin diagnostics; deny if ADMIN_CHAT_ID is unset."""
-    admin_id = os.getenv("ADMIN_CHAT_ID", "").strip()
-    user = update.effective_user
-    message = update.message
-    if not admin_id.isdecimal() or user is None or str(user.id) != admin_id:
-        if message is not None:
-            await message.reply_text("Not authorized.")
-        return
-    if message is None or update.effective_chat is None or update.effective_chat.type != "private":
-        return
-    try:
-        info = await asyncio.to_thread(status_snapshot, started_at=PROCESS_STARTED_AT)
-        await message.reply_text(format_status(info))
-    except Exception:
-        log.exception("Status diagnostics failed")
-        await message.reply_text("Diagnostics unavailable. Check secure server logs.")
-
-
-async def status_command(update, context):
     """Admin-only diagnostics; never reveal session contents or identifiers."""
     admin_id = os.getenv("ADMIN_CHAT_ID", "").strip()
     user = update.effective_user
@@ -129,7 +109,7 @@ async def status_command(update, context):
     if message is None or update.effective_chat is None or update.effective_chat.type != "private":
         return
     try:
-        info = await asyncio.to_thread(status_snapshot, started_at=STARTED_AT)
+        info = await asyncio.to_thread(status_snapshot, started_at=PROCESS_STARTED_AT)
         await message.reply_text(format_status(info))
     except Exception:
         log.exception("Status diagnostic failed")
@@ -148,7 +128,6 @@ def main():
         raise SystemExit("Existing session database failed integrity validation")
     application = ApplicationBuilder().token(token).post_init(verify_identity).build()
     application.add_handler(CommandHandler("backup", manual_backup_command))
-    application.add_handler(CommandHandler("status", status_command))
     application.add_handler(CommandHandler("status", status_command))
     application.add_handler(CallbackQueryHandler(telegram_handler, pattern=r"^sr:"))
     application.add_handler(MessageHandler(filters.TEXT, telegram_handler))

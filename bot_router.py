@@ -1,10 +1,13 @@
 """Async Telegram update router with injected, verified search results."""
+import asyncio
+import logging
 import os
 import secrets
 
 from session_manager import SessionManager
 from search_pagination import build_search_keyboard, new_search_session, process_search_callback
 
+log = logging.getLogger(__name__)
 db = None
 
 
@@ -32,7 +35,8 @@ async def handle_update(update, context, *, search_provider=None, store=None):
     if callback is not None:
         result = process_search_callback(
             user_id, callback.data, load_session=store.get_session,
-            save_session=store.set_session, clear_session=store.clear_session)
+            save_session=store.set_session, clear_session=store.clear_session,
+            compare_and_set=getattr(store, "compare_and_set_session", None))
         await callback.answer("" if result["ok"] else result["error"],
                               show_alert=not result["ok"])
         if not result["ok"]:
@@ -54,6 +58,9 @@ async def handle_update(update, context, *, search_provider=None, store=None):
         store.clear_session(user_id)
         await message.reply_text("Cancelled.")
         return
+    if text == "/help":
+        await message.reply_text("Commands: /start, /cancel, /help")
+        return
     if text == "/start":
         store.set_session(user_id, "WAITING_FOR_QUERY", {})
         await message.reply_text("Welcome to kutepboku. Send an eBook search topic.")
@@ -62,10 +69,27 @@ async def handle_update(update, context, *, search_provider=None, store=None):
     if state != "WAITING_FOR_QUERY" or not text:
         await message.reply_text("Send /start to begin a search.")
         return
+    if text.startswith("/"):
+        await message.reply_text("Unknown command. Send /help.")
+        return
+    if len(text) > 200:
+        await message.reply_text("Search query exceeds 200 characters.")
+        return
     if search_provider is None:
         await message.reply_text("Search is not configured yet.")
         return
-    results = await search_provider(text)
+    try:
+        results = await asyncio.wait_for(search_provider(text), timeout=20)
+    except asyncio.CancelledError:
+        raise
+    except asyncio.TimeoutError:
+        log.warning("Verified search timed out")
+        await message.reply_text("Search timed out. Please try again later.")
+        return
+    except Exception:
+        log.exception("Verified search failed")
+        await message.reply_text("Search is temporarily unavailable. Please try again later.")
+        return
     if not isinstance(results, list) or not results:
         await message.reply_text("No verified books found.")
         return
