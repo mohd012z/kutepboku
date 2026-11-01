@@ -1,41 +1,44 @@
-export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    if (url.pathname === "/health" && request.method === "GET") {
-      return Response.json({ service: "msasoup-telegram", status: "configured" });
-    }
-    if (url.pathname !== "/telegram" || request.method !== "POST") return new Response("Not found", { status: 404 });
-    const provided = request.headers.get("X-Telegram-Bot-Api-Secret-Token") || "";
-    if (!env.TELEGRAM_WEBHOOK_SECRET || !env.TELEGRAM_BOT_TOKEN || !constantTimeEqual(provided, env.TELEGRAM_WEBHOOK_SECRET))
-      return new Response("Unauthorized", { status: 401 });
-    if (Number(request.headers.get("content-length") || 0) > 65536) return new Response("Too large", { status: 413 });
-    let update;
-    try { update = await request.json(); } catch { return new Response("Bad JSON", { status: 400 }); }
-    if (!Number.isSafeInteger(update?.update_id)) return new Response("Bad update", { status: 400 });
-    const message = update.message;
-    if (!message?.chat?.id || typeof message.text !== "string") return new Response("OK");
-    const command = message.text.split(/\s+/)[0].split("@")[0].toLowerCase();
-    const replies = {
-      "/start": "Welcome to MSASoup 📚\nUse /menu for commands.",
-      "/menu": "📚 MSASoup\n/start — Welcome\n/help — Help\n/status — Worker status\n/search — Search information",
-      "/help": "Use /menu to see commands. The research engine is not yet connected to this Worker.",
-      "/status": "MSASoup webhook receiver is online. Research and delivery status are separate.",
-      "/search": "Search is not yet connected to the Cloudflare Worker. No search has been started."
-    };
-    const text = replies[command];
-    if (!text) return new Response("OK");
-    const response = await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/sendMessage", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: message.chat.id, text })
-    });
-    if (!response.ok) return new Response("Telegram unavailable", { status: 503 });
-    const result = await response.json();
-    return new Response(result.ok ? "OK" : "Telegram rejected message", { status: result.ok ? 200 : 503 });
-  }
-};
-function constantTimeEqual(a,b) {
-  const x=new TextEncoder().encode(a), y=new TextEncoder().encode(b);
-  let diff=x.length ^ y.length;
-  for(let i=0;i<Math.max(x.length,y.length);i++) diff|=(x[i]||0)^(y[i]||0);
-  return diff===0;
+const MENU={inline_keyboard:[[{text:"📚 Search",callback_data:"m:search"},{text:"ℹ️ Help",callback_data:"m:help"}],[{text:"📊 Status",callback_data:"m:status"}]]};
+function reply(command){
+ if(command==="/start"||command==="/menu"||command==="m:menu")return {text:"📚 MSASoup menu",reply_markup:MENU};
+ if(command==="/help"||command==="m:help")return {text:"Use /menu. The research engine is not connected to this Worker.",reply_markup:MENU};
+ if(command==="/search"||command==="m:search")return {text:"Search is not available on this Worker yet. No search was started.",reply_markup:MENU};
+ if(command==="/status"||command==="m:status")return {text:"MSASoup Worker is receiving updates. Research status is not verified.",reply_markup:MENU};
+ return null;
 }
+function equal(a,b){const x=new TextEncoder().encode(a),y=new TextEncoder().encode(b);let d=x.length^y.length;for(let i=0;i<Math.max(x.length,y.length);i++)d|=(x[i]||0)^(y[i]||0);return d===0;}
+async function telegram(env,method,payload){
+ const r=await fetch("https://api.telegram.org/bot"+env.TELEGRAM_BOT_TOKEN+"/"+method,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});
+ if(!r.ok)throw Error("Telegram HTTP "+r.status);
+ const data=await r.json();if(!data.ok)throw Error("Telegram API rejected "+method);return data.result;
+}
+export default {async fetch(request,env){
+ const path=new URL(request.url).pathname;
+ if(path==="/health"&&request.method==="GET")return Response.json({service:"msasoup-telegram",configured:!!(env.DB&&env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_WEBHOOK_SECRET)});
+ if(path!=="/telegram"||request.method!=="POST")return new Response("Not found",{status:404});
+ if(!env.DB||!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_WEBHOOK_SECRET)return new Response("Unavailable",{status:503});
+ if(!equal(request.headers.get("X-Telegram-Bot-Api-Secret-Token")||"",env.TELEGRAM_WEBHOOK_SECRET))return new Response("Unauthorized",{status:401});
+ const raw=await request.text();if(raw.length>65536)return new Response("Too large",{status:413});
+ let update;try{update=JSON.parse(raw);}catch{return new Response("Bad JSON",{status:400});}
+ if(!Number.isSafeInteger(update?.update_id))return new Response("Bad update",{status:400});
+ const message=update.message,callback=update.callback_query,actor=callback?.from||message?.from,chat=callback?.message?.chat||message?.chat;
+ if(!chat?.id||!actor?.id)return new Response("OK");
+ const allowed=(env.TELEGRAM_ALLOWED_USER_IDS||"").split(",").map(x=>x.trim()).filter(Boolean);
+ if(!allowed.includes(String(actor.id)))return new Response("OK");
+ const command=callback?callback.data:(message?.text||"").trim().split(/\s+/)[0].split("@")[0].toLowerCase();
+ const response=reply(command);if(!response)return new Response("OK");
+ const id=update.update_id;
+ try{
+  const claimed=await env.DB.prepare("INSERT INTO telegram_updates(update_id,status) VALUES (?,'received') ON CONFLICT(update_id) DO NOTHING").bind(id).run();
+  if(claimed.meta?.changes===0)return new Response("OK");
+  await env.DB.prepare("INSERT INTO telegram_outbox(update_id,chat_id,reply_text,status) VALUES (?,?,?,'pending')").bind(id,String(chat.id),response.text).run();
+  await telegram(env,"sendMessage",{chat_id:chat.id,...response});
+  await env.DB.prepare("UPDATE telegram_outbox SET status='sent',attempts=attempts+1 WHERE update_id=?").bind(id).run();
+  await env.DB.prepare("UPDATE telegram_updates SET status='sent' WHERE update_id=?").bind(id).run();
+  if(callback?.id)await telegram(env,"answerCallbackQuery",{callback_query_id:callback.id});
+  return new Response("OK");
+ }catch(e){
+  await env.DB.prepare("UPDATE telegram_outbox SET status='uncertain',attempts=attempts+1 WHERE update_id=? AND status='pending'").bind(id).run().catch(()=>{});
+  return new Response("Accepted for reconciliation",{status:200});
+ }
+}};
