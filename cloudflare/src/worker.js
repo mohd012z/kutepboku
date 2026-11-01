@@ -29,9 +29,9 @@ export default {async fetch(request,env){
  const response=reply(command);if(!response)return new Response("OK");
  const id=update.update_id;
  try{
-  const claimed=await env.DB.prepare("INSERT INTO telegram_updates(update_id,status) VALUES (?,'received') ON CONFLICT(update_id) DO NOTHING").bind(id).run();
-  if(claimed.meta?.changes===0)return new Response("OK");
-  await env.DB.prepare("INSERT INTO telegram_outbox(update_id,chat_id,reply_text,status) VALUES (?,?,?,'pending')").bind(id,String(chat.id),response.text).run();
+  const existing=await env.DB.prepare("SELECT status FROM telegram_updates WHERE update_id=?").bind(id).first();
+  if(existing)return new Response("OK");
+  await env.DB.batch([env.DB.prepare("INSERT INTO telegram_updates(update_id,status) VALUES (?,'received')").bind(id),env.DB.prepare("INSERT INTO telegram_outbox(update_id,chat_id,reply_text,status) VALUES (?,?,?,'pending')").bind(id,String(chat.id),response.text)]);
   await telegram(env,"sendMessage",{chat_id:chat.id,...response});
   await env.DB.prepare("UPDATE telegram_outbox SET status='sent',attempts=attempts+1 WHERE update_id=?").bind(id).run();
   await env.DB.prepare("UPDATE telegram_updates SET status='sent' WHERE update_id=?").bind(id).run();
