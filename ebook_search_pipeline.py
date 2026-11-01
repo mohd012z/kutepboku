@@ -109,7 +109,7 @@ def dynamic_ebook_search(query, *, client=requests, relevance_checker=None,
 # --- key-free: Internet Archive with optional caller-provided screening ----
 
 def llm_relevance_indices(topic, titles, *, client=requests, base_url=None,
-                          api_key=None, model=None, timeout=20):
+                          api_key=None, model="default", timeout=20):
     """Ask the team LLM (OpenAI-compatible) which numbered titles are on-topic.
 
     Returns a set of 1-based indices the model judged relevant, or None when the
