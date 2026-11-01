@@ -30,13 +30,28 @@ export default {async fetch(request,env){
  const response=reply(command);if(!response)return new Response("OK");
  const id=update.update_id;
  try{
-  const existing=await env.DB.prepare("SELECT status FROM telegram_updates WHERE update_id=?").bind(id).first();
-  if(existing)return new Response("OK");
-  try {await env.DB.batch([env.DB.prepare("INSERT INTO telegram_updates(update_id,status) VALUES (?,'received')").bind(id),env.DB.prepare("INSERT INTO telegram_outbox(update_id,chat_id,reply_text,status) VALUES (?,?,?,'pending')").bind(id,String(chat.id),response.text)]);}
-  catch(err){const duplicate=await env.DB.prepare("SELECT status FROM telegram_updates WHERE update_id=?").bind(id).first();if(duplicate)return new Response("OK");throw err;}
-  await env.DB.prepare("UPDATE telegram_outbox SET status='sending',attempts=attempts+1 WHERE update_id=? AND status='pending'").bind(id).run();
+  let existing=await env.DB.prepare("SELECT status FROM telegram_updates WHERE update_id=?").bind(id).first();
+  if(!existing){
+   try{
+    await env.DB.batch([
+     env.DB.prepare("INSERT INTO telegram_updates(update_id,status) VALUES (?,'received')").bind(id),
+     env.DB.prepare("INSERT INTO telegram_outbox(update_id,chat_id,reply_text,status) VALUES (?,?,?,'pending')").bind(id,String(chat.id),response.text)
+    ]);
+   }catch(err){
+    existing=await env.DB.prepare("SELECT status FROM telegram_updates WHERE update_id=?").bind(id).first();
+    if(!existing)throw err;
+   }
+  }
+  const current=await env.DB.prepare("SELECT status FROM telegram_outbox WHERE update_id=?").bind(id).first();
+  if(!current)throw Error("Outbox row missing");
+  if(current.status==="sent")return new Response("OK");
+  // Unknown outcomes cannot be resent automatically without risking duplicate messages.
+  if(current.status==="sending"||current.status==="uncertain")return new Response("Delivery requires reconciliation",{status:503});
+  if(current.status!=="pending")return new Response("Invalid delivery state",{status:503});
+  const claimed=await env.DB.prepare("UPDATE telegram_outbox SET status='sending',attempts=attempts+1 WHERE update_id=? AND status='pending' RETURNING id").bind(id).first();
+  if(!claimed)return new Response("Concurrent delivery in progress",{status:503});
   await telegram(env,"sendMessage",{chat_id:chat.id,...response});
-  await env.DB.prepare("UPDATE telegram_outbox SET status='sent' WHERE update_id=?").bind(id).run();
+  await env.DB.prepare("UPDATE telegram_outbox SET status='sent' WHERE update_id=? AND status='sending'").bind(id).run();
   await env.DB.prepare("UPDATE telegram_updates SET status='sent' WHERE update_id=?").bind(id).run();
   if(callback?.id)await telegram(env,"answerCallbackQuery",{callback_query_id:callback.id});
   return new Response("OK");
