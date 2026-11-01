@@ -19,7 +19,22 @@ export default {async fetch(request,env){
  if(!env.DB||!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_WEBHOOK_SECRET||!env.TELEGRAM_ALLOWED_USER_IDS)return new Response("Unavailable",{status:503});
  if(!equal(request.headers.get("X-Telegram-Bot-Api-Secret-Token")||"",env.TELEGRAM_WEBHOOK_SECRET))return new Response("Unauthorized",{status:401});
  const size=Number(request.headers.get("content-length"));if(Number.isFinite(size)&&size>65536)return new Response("Too large",{status:413});
- const raw=await request.text();if(new TextEncoder().encode(raw).byteLength>65536)return new Response("Too large",{status:413});
+ const reader=request.body?.getReader();
+ let raw="";
+ if(reader){
+  const decoder=new TextDecoder("utf-8",{fatal:true});
+  let bytes=0;
+  try{
+   while(true){
+    const {done,value}=await reader.read();
+    if(done)break;
+    bytes+=value.byteLength;
+    if(bytes>65536){await reader.cancel().catch(()=>{});return new Response("Too large",{status:413});}
+    raw+=decoder.decode(value,{stream:true});
+   }
+   raw+=decoder.decode();
+  }catch{return new Response("Invalid UTF-8",{status:400});}
+ }
  let update;try{update=JSON.parse(raw);}catch{return new Response("Bad JSON",{status:400});}
  if(!Number.isSafeInteger(update?.update_id)||update.update_id<0)return new Response("Bad update",{status:400});
  const message=update.message,callback=update.callback_query,actor=callback?.from||message?.from,chat=callback?.message?.chat||message?.chat;
