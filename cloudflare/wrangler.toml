@@ -3,6 +3,13 @@ main = "src/worker.js"
 compatibility_date = "2026-10-01"
 workers_dev = true
 
-# Configure with wrangler secret put TELEGRAM_BOT_TOKEN
-# Configure with wrangler secret put TELEGRAM_WEBHOOK_SECRET
-# Do not configure Telegram setWebhook until staging tests pass.
+[[d1_databases]]
+binding = "DB"
+database_name = "msasoup-db"
+database_id = "55b8f334-eba2-452d-bbc9-96a9169a8c12"
+
+# Set encrypted Worker secrets in Cloudflare; never commit their values:
+# TELEGRAM_BOT_TOKEN
+# TELEGRAM_WEBHOOK_SECRET
+# TELEGRAM_ALLOWED_USER_IDS
+# Production webhook cutover requires identity, ownership, HTTPS, and rollback checks.
