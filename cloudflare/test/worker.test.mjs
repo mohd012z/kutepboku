@@ -61,3 +61,13 @@ test('health is ready only after a successful D1 query',async()=>{
  assert.equal(r.status,200);
  assert.equal((await r.json()).ready,true);
 });
+
+test('content-length above limit is rejected before body processing',async()=>{
+ const body=JSON.stringify({update_id:22});
+ const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:{...authHeaders,'content-length':'65537'},body}),authEnv);
+ assert.equal(r.status,413);
+});
+test('missing content-length still permits a valid ignored update',async()=>{
+ const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body:JSON.stringify({update_id:23})}),authEnv);
+ assert.equal(r.status,200);
+});
