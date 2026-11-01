@@ -1,0 +1,8 @@
+name = "msasoup-telegram"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+# Configure with wrangler secret put TELEGRAM_BOT_TOKEN
+# Configure with wrangler secret put TELEGRAM_WEBHOOK_SECRET
+# Do not configure Telegram setWebhook until staging tests pass.
