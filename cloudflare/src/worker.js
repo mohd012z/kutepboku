@@ -23,7 +23,11 @@ export default {async fetch(request,env){
  if(path!=="/telegram"||request.method!=="POST")return new Response("Not found",{status:404});
  if(!env.DB||!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_WEBHOOK_SECRET||!env.TELEGRAM_ALLOWED_USER_IDS)return new Response("Unavailable",{status:503});
  if(!equal(request.headers.get("X-Telegram-Bot-Api-Secret-Token")||"",env.TELEGRAM_WEBHOOK_SECRET))return new Response("Unauthorized",{status:401});
- const size=Number(request.headers.get("content-length"));if(Number.isFinite(size)&&size>65536)return new Response("Too large",{status:413});
+ const lengthHeader=request.headers.get("content-length");
+ if(lengthHeader!==null){
+  if(!/^(0|[1-9][0-9]*)$/.test(lengthHeader))return new Response("Invalid content length",{status:400});
+  if(Number(lengthHeader)>65536)return new Response("Too large",{status:413});
+ }
  const reader=request.body?.getReader();
  let raw="";
  if(reader){
