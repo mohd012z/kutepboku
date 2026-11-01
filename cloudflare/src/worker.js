@@ -16,7 +16,7 @@ export default {async fetch(request,env){
  const path=new URL(request.url).pathname;
  if(path==="/health"&&request.method==="GET")return Response.json({service:"msasoup-telegram",configured:!!(env.DB&&env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_WEBHOOK_SECRET)});
  if(path!=="/telegram"||request.method!=="POST")return new Response("Not found",{status:404});
- if(!env.DB||!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_WEBHOOK_SECRET)return new Response("Unavailable",{status:503});
+ if(!env.DB||!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_WEBHOOK_SECRET||!env.TELEGRAM_ALLOWED_USER_IDS)return new Response("Unavailable",{status:503});
  if(!equal(request.headers.get("X-Telegram-Bot-Api-Secret-Token")||"",env.TELEGRAM_WEBHOOK_SECRET))return new Response("Unauthorized",{status:401});
  const raw=await request.text();if(raw.length>65536)return new Response("Too large",{status:413});
  let update;try{update=JSON.parse(raw);}catch{return new Response("Bad JSON",{status:400});}
@@ -31,14 +31,16 @@ export default {async fetch(request,env){
  try{
   const existing=await env.DB.prepare("SELECT status FROM telegram_updates WHERE update_id=?").bind(id).first();
   if(existing)return new Response("OK");
-  await env.DB.batch([env.DB.prepare("INSERT INTO telegram_updates(update_id,status) VALUES (?,'received')").bind(id),env.DB.prepare("INSERT INTO telegram_outbox(update_id,chat_id,reply_text,status) VALUES (?,?,?,'pending')").bind(id,String(chat.id),response.text)]);
+  try {await env.DB.batch([env.DB.prepare("INSERT INTO telegram_updates(update_id,status) VALUES (?,'received')").bind(id),env.DB.prepare("INSERT INTO telegram_outbox(update_id,chat_id,reply_text,status) VALUES (?,?,?,'pending')").bind(id,String(chat.id),response.text)]);}
+  catch(err){const duplicate=await env.DB.prepare("SELECT status FROM telegram_updates WHERE update_id=?").bind(id).first();if(duplicate)return new Response("OK");throw err;}
+  await env.DB.prepare("UPDATE telegram_outbox SET status='sending',attempts=attempts+1 WHERE update_id=? AND status='pending'").bind(id).run();
   await telegram(env,"sendMessage",{chat_id:chat.id,...response});
-  await env.DB.prepare("UPDATE telegram_outbox SET status='sent',attempts=attempts+1 WHERE update_id=?").bind(id).run();
+  await env.DB.prepare("UPDATE telegram_outbox SET status='sent' WHERE update_id=?").bind(id).run();
   await env.DB.prepare("UPDATE telegram_updates SET status='sent' WHERE update_id=?").bind(id).run();
   if(callback?.id)await telegram(env,"answerCallbackQuery",{callback_query_id:callback.id});
   return new Response("OK");
  }catch(e){
-  await env.DB.prepare("UPDATE telegram_outbox SET status='uncertain',attempts=attempts+1 WHERE update_id=? AND status='pending'").bind(id).run().catch(()=>{});
+  await env.DB.prepare("UPDATE telegram_outbox SET status='uncertain' WHERE update_id=? AND status='sending'").bind(id).run().catch(()=>{});
   return new Response("Accepted for reconciliation",{status:200});
  }
 }};
