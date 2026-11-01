@@ -35,3 +35,14 @@ test('valid Telegram update with missing D1 adapter fails closed',async()=>{
  const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body}),authEnv);
  assert.equal(r.status,503);
 });
+
+test('invalid UTF-8 is rejected without D1 access',async()=>{
+ const bytes=new Uint8Array([0xc3,0x28]);
+ const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body:bytes}),authEnv);
+ assert.equal(r.status,400);
+});
+test('oversized streamed body is rejected without D1 access',async()=>{
+ const body=new ReadableStream({start(c){c.enqueue(new Uint8Array(32768));c.enqueue(new Uint8Array(32769));c.close()}});
+ const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body,duplex:'half'}),authEnv);
+ assert.equal(r.status,413);
+});
