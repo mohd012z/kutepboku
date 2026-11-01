@@ -14,7 +14,7 @@ async function telegram(env,method,payload){
 }
 export default {async fetch(request,env){
  const path=new URL(request.url).pathname;
- if(path==="/health"&&request.method==="GET")return Response.json({service:"msasoup-telegram",configured:!!(env.DB&&env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_WEBHOOK_SECRET)});
+ if(path==="/health"&&request.method==="GET")return Response.json({service:"msasoup-telegram",configured:!!(env.DB&&env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_WEBHOOK_SECRET&&env.TELEGRAM_ALLOWED_USER_IDS)});
  if(path!=="/telegram"||request.method!=="POST")return new Response("Not found",{status:404});
  if(!env.DB||!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_WEBHOOK_SECRET||!env.TELEGRAM_ALLOWED_USER_IDS)return new Response("Unavailable",{status:503});
  if(!equal(request.headers.get("X-Telegram-Bot-Api-Secret-Token")||"",env.TELEGRAM_WEBHOOK_SECRET))return new Response("Unauthorized",{status:401});
