@@ -71,3 +71,12 @@ test('missing content-length still permits a valid ignored update',async()=>{
  const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body:JSON.stringify({update_id:23})}),authEnv);
  assert.equal(r.status,200);
 });
+
+test('malformed content-length is rejected before database access',async()=>{
+ const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:{...authHeaders,'content-length':'garbage'},body:'{}'}),authEnv);
+ assert.equal(r.status,400);
+});
+test('negative content-length is rejected before database access',async()=>{
+ const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:{...authHeaders,'content-length':'-1'},body:'{}'}),authEnv);
+ assert.equal(r.status,400);
+});
