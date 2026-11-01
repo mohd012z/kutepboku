@@ -46,3 +46,18 @@ test('oversized streamed body is rejected without D1 access',async()=>{
  const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body,duplex:'half'}),authEnv);
  assert.equal(r.status,413);
 });
+
+test('health is 503 when D1 adapter is unavailable',async()=>{
+ const r=await worker.fetch(new Request('https://example.test/health'),authEnv);
+ const data=await r.json();
+ assert.equal(r.status,503);
+ assert.equal(data.configured,true);
+ assert.equal(data.databaseReady,false);
+ assert.equal(data.ready,false);
+});
+test('health is ready only after a successful D1 query',async()=>{
+ const env={...authEnv,DB:{prepare(sql){assert.equal(sql,'SELECT 1 AS ok');return {first:async()=>({ok:1})}}}};
+ const r=await worker.fetch(new Request('https://example.test/health'),env);
+ assert.equal(r.status,200);
+ assert.equal((await r.json()).ready,true);
+});
