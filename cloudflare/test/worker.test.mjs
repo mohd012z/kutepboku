@@ -17,3 +17,21 @@ test('negative update id rejected',async()=>{const r=await worker.fetch(new Requ
 test('noninteger update id rejected',async()=>{const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body:JSON.stringify({update_id:1.5})}),authEnv);assert.equal(r.status,400)});
 test('oversized UTF-8 body rejected',async()=>{const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body:JSON.stringify({update_id:1,message:{text:'🌍'.repeat(18000)}})}),authEnv);assert.equal(r.status,413)});
 test('unrecognized update does not write to D1',async()=>{const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body:JSON.stringify({update_id:1})}),authEnv);assert.equal(r.status,200)});
+
+test('unauthorized Telegram actor is ignored without database access',async()=>{
+ const body=JSON.stringify({update_id:17,message:{from:{id:999},chat:{id:999},text:'/start'}});
+ const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body}),authEnv);
+ assert.equal(r.status,200);
+ assert.equal(await r.text(),'OK');
+});
+test('unsupported command from authorized actor is ignored without database access',async()=>{
+ const body=JSON.stringify({update_id:18,message:{from:{id:123},chat:{id:123},text:'/not-a-command'}});
+ const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body}),authEnv);
+ assert.equal(r.status,200);
+ assert.equal(await r.text(),'OK');
+});
+test('valid Telegram update with missing D1 adapter fails closed',async()=>{
+ const body=JSON.stringify({update_id:19,message:{from:{id:123},chat:{id:123},text:'/start'}});
+ const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body}),authEnv);
+ assert.equal(r.status,503);
+});
