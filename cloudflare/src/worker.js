@@ -18,9 +18,10 @@ export default {async fetch(request,env){
  if(path!=="/telegram"||request.method!=="POST")return new Response("Not found",{status:404});
  if(!env.DB||!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_WEBHOOK_SECRET||!env.TELEGRAM_ALLOWED_USER_IDS)return new Response("Unavailable",{status:503});
  if(!equal(request.headers.get("X-Telegram-Bot-Api-Secret-Token")||"",env.TELEGRAM_WEBHOOK_SECRET))return new Response("Unauthorized",{status:401});
- const raw=await request.text();if(raw.length>65536)return new Response("Too large",{status:413});
+ const size=Number(request.headers.get("content-length"));if(Number.isFinite(size)&&size>65536)return new Response("Too large",{status:413});
+ const raw=await request.text();if(new TextEncoder().encode(raw).byteLength>65536)return new Response("Too large",{status:413});
  let update;try{update=JSON.parse(raw);}catch{return new Response("Bad JSON",{status:400});}
- if(!Number.isSafeInteger(update?.update_id))return new Response("Bad update",{status:400});
+ if(!Number.isSafeInteger(update?.update_id)||update.update_id<0)return new Response("Bad update",{status:400});
  const message=update.message,callback=update.callback_query,actor=callback?.from||message?.from,chat=callback?.message?.chat||message?.chat;
  if(!chat?.id||!actor?.id)return new Response("OK");
  const allowed=(env.TELEGRAM_ALLOWED_USER_IDS||"").split(",").map(x=>x.trim()).filter(Boolean);
