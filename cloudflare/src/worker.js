@@ -44,7 +44,10 @@ export default {async fetch(request,env){
   }
   const current=await env.DB.prepare("SELECT status FROM telegram_outbox WHERE update_id=?").bind(id).first();
   if(!current)throw Error("Outbox row missing");
-  if(current.status==="sent")return new Response("OK");
+  if(current.status==="sent"){
+   if(callback?.id)await telegram(env,"answerCallbackQuery",{callback_query_id:callback.id}).catch(()=>{});
+   return new Response("OK");
+  }
   // Unknown outcomes cannot be resent automatically without risking duplicate messages.
   if(current.status==="sending"||current.status==="uncertain")return new Response("Delivery requires reconciliation",{status:503});
   if(current.status!=="pending")return new Response("Invalid delivery state",{status:503});
@@ -53,7 +56,7 @@ export default {async fetch(request,env){
   await telegram(env,"sendMessage",{chat_id:chat.id,...response});
   await env.DB.prepare("UPDATE telegram_outbox SET status='sent' WHERE update_id=? AND status='sending'").bind(id).run();
   await env.DB.prepare("UPDATE telegram_updates SET status='sent' WHERE update_id=?").bind(id).run();
-  if(callback?.id)await telegram(env,"answerCallbackQuery",{callback_query_id:callback.id});
+  if(callback?.id)await telegram(env,"answerCallbackQuery",{callback_query_id:callback.id}).catch(()=>{});
   return new Response("OK");
  }catch(e){
   await env.DB.prepare("UPDATE telegram_outbox SET status='uncertain' WHERE update_id=? AND status='sending'").bind(id).run().catch(()=>{});
