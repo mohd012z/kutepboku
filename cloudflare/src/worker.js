@@ -3,7 +3,7 @@ function reply(command){
  if(command==="/start"||command==="/menu"||command==="m:menu")return {text:"📚 MSASoup menu",reply_markup:MENU};
  if(command==="/help"||command==="m:help")return {text:"Use /menu. The research engine is not connected to this Worker.",reply_markup:MENU};
  if(command==="/search"||command==="m:search")return {text:"Search is not available on this Worker yet. No search was started.",reply_markup:MENU};
- if(command==="/status"||command==="m:status")return {text:"MSASoup Worker is receiving updates. Research status is not verified.",reply_markup:MENU};
+ if(command==="/status"||command==="m:status")return {text:"📊 MSASoup status: Worker command handler active. Live webhook delivery and research engine availability are not confirmed by this message.",reply_markup:MENU};
  return null;
 }
 function equal(a,b){const x=new TextEncoder().encode(a),y=new TextEncoder().encode(b);let d=x.length^y.length;for(let i=0;i<Math.max(x.length,y.length);i++)d|=(x[i]||0)^(y[i]||0);return d===0;}
@@ -42,6 +42,6 @@ export default {async fetch(request,env){
   return new Response("OK");
  }catch(e){
   await env.DB.prepare("UPDATE telegram_outbox SET status='uncertain' WHERE update_id=? AND status='sending'").bind(id).run().catch(()=>{});
-  return new Response("Accepted for reconciliation",{status:200});
+  return new Response("Temporary delivery failure",{status:503});
  }
 }};
