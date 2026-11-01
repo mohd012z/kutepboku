@@ -54,7 +54,8 @@ export default {async fetch(request,env){
   const claimed=await env.DB.prepare("UPDATE telegram_outbox SET status='sending',attempts=attempts+1 WHERE update_id=? AND status='pending' RETURNING id").bind(id).first();
   if(!claimed)return new Response("Concurrent delivery in progress",{status:503});
   await telegram(env,"sendMessage",{chat_id:chat.id,...response});
-  await env.DB.prepare("UPDATE telegram_outbox SET status='sent' WHERE update_id=? AND status='sending'").bind(id).run();
+  const finalized=await env.DB.prepare("UPDATE telegram_outbox SET status='sent' WHERE update_id=? AND status='sending' RETURNING id").bind(id).first();
+  if(!finalized)throw Error("Outbox finalization failed");
   await env.DB.prepare("UPDATE telegram_updates SET status='sent' WHERE update_id=?").bind(id).run();
   if(callback?.id)await telegram(env,"answerCallbackQuery",{callback_query_id:callback.id}).catch(()=>{});
   return new Response("OK");
