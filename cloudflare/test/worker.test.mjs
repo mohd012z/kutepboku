@@ -146,3 +146,21 @@ test('ambiguous Telegram send remains uncertain and is never automatically resen
   assert.equal(sends,1);
  }finally{globalThis.fetch=original}
 });
+
+test('concurrent identical updates cannot send twice after one successful claim',async()=>{
+ const db=fakeD1(),original=globalThis.fetch;let sends=0;
+ globalThis.fetch=async()=>{sends++;await Promise.resolve();return Response.json({ok:true,result:{message_id:77}})};
+ try{
+  const env={...authEnv,DB:db},body=JSON.stringify({update_id:702,message:{from:{id:123},chat:{id:123},text:'/menu'}});
+  const request=()=>worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body}),env);
+  const results=await Promise.all([request(),request()]);
+  assert.equal(sends,1);
+  assert.ok(results.every(r=>[200,503].includes(r.status)));
+  assert.equal(db.outbox.get(702).status,'sent');
+ }finally{globalThis.fetch=original}
+});
+test('malformed callback actor is ignored without DB access',async()=>{
+ const body=JSON.stringify({update_id:703,callback_query:{id:'cb',data:'m:menu',message:{chat:{id:123}}}});
+ const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body}),authEnv);
+ assert.equal(r.status,200);
+});
