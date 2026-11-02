@@ -81,7 +81,8 @@ export default {async fetch(request,env){
   await telegram(env,"sendMessage",{chat_id:chat.id,...response});
   const finalized=await env.DB.prepare("UPDATE telegram_outbox SET status='sent' WHERE update_id=? AND status='sending' RETURNING id").bind(id).first();
   if(!finalized)throw Error("Outbox finalization failed");
-  await env.DB.prepare("UPDATE telegram_updates SET status='sent' WHERE update_id=?").bind(id).run();
+  // The outbox is authoritative after Telegram acknowledges delivery. A secondary status update must not turn a confirmed send into a retryable failure.
+  await env.DB.prepare("UPDATE telegram_updates SET status='sent' WHERE update_id=?").bind(id).run().catch(()=>{});
   if(callback?.id)await telegram(env,"answerCallbackQuery",{callback_query_id:callback.id}).catch(()=>{});
   return new Response("OK");
  }catch(e){
