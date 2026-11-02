@@ -21,7 +21,7 @@ export default {async fetch(request,env){
   return Response.json({service:"msasoup-telegram",configured,databaseReady,ready:configured&&databaseReady},{status:configured&&databaseReady?200:503});
  }
  if(path!=="/telegram"||request.method!=="POST")return new Response("Not found",{status:404});
- if(!env.DB||!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_WEBHOOK_SECRET||!env.TELEGRAM_ALLOWED_USER_IDS)return new Response("Unavailable",{status:503});
+ if(!env.DB||typeof env.DB.prepare!=="function"||typeof env.DB.batch!=="function"||!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_WEBHOOK_SECRET||!env.TELEGRAM_ALLOWED_USER_IDS)return new Response("Unavailable",{status:503});
  if(!equal(request.headers.get("X-Telegram-Bot-Api-Secret-Token")||"",env.TELEGRAM_WEBHOOK_SECRET))return new Response("Unauthorized",{status:401});
  const lengthHeader=request.headers.get("content-length");
  if(lengthHeader!==null){
