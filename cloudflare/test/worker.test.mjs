@@ -62,10 +62,11 @@ const validSchema={
 function schemaDb(schema=validSchema){
  const queries=[];
  return {queries,prepare(sql){
-  const match=/^PRAGMA table_info\\((telegram_updates|telegram_outbox)\\)$/.exec(sql);
-  assert.ok(match,'unexpected schema probe: '+sql);
-  queries.push(match[1]);
-  return {all:async()=>({results:(schema[match[1]]||[]).map(name=>({name}))})};
+  const table=sql==='PRAGMA table_info(telegram_updates)' ? 'telegram_updates' :
+   sql==='PRAGMA table_info(telegram_outbox)' ? 'telegram_outbox' : null;
+  assert.ok(table,'unexpected schema probe: '+sql);
+  queries.push(table);
+  return {all:async()=>({results:(schema[table]||[]).map(name=>({name}))})};
  }};
 }
 test('health accepts empty D1 tables with all required columns',async()=>{
