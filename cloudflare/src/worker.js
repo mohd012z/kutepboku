@@ -17,7 +17,7 @@ export default {async fetch(request,env){
  if(path==="/health"&&request.method==="GET"){
   const configured=!!(env.DB&&env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_WEBHOOK_SECRET&&env.TELEGRAM_ALLOWED_USER_IDS);
   let databaseReady=false;
-  if(configured){try{const row=await env.DB.prepare("SELECT 1 AS ok").first();databaseReady=row?.ok===1;}catch{databaseReady=false;}}
+  if(configured){try{const row=await env.DB.prepare("SELECT (SELECT COUNT(*) FROM telegram_updates) AS inbox_rows, (SELECT COUNT(*) FROM telegram_outbox) AS outbox_rows").first();databaseReady=Number.isSafeInteger(row?.inbox_rows)&&row.inbox_rows>=0&&Number.isSafeInteger(row?.outbox_rows)&&row.outbox_rows>=0;}catch{databaseReady=false;}}
   return Response.json({service:"msasoup-telegram",configured,databaseReady,ready:configured&&databaseReady},{status:configured&&databaseReady?200:503});
  }
  if(path!=="/telegram"||request.method!=="POST")return new Response("Not found",{status:404});

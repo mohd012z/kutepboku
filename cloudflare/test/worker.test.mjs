@@ -55,11 +55,37 @@ test('health is 503 when D1 adapter is unavailable',async()=>{
  assert.equal(data.databaseReady,false);
  assert.equal(data.ready,false);
 });
-test('health is ready only after a successful D1 query',async()=>{
- const env={...authEnv,DB:{prepare(sql){assert.equal(sql,'SELECT 1 AS ok');return {first:async()=>({ok:1})}}}};
+test('health is ready only when both webhook D1 tables exist (including empty tables)',async()=>{
+ const env={...authEnv,DB:{prepare(sql){
+  assert.match(sql,/FROM telegram_updates/);
+  assert.match(sql,/FROM telegram_outbox/);
+  return {first:async()=>({inbox_rows:0,outbox_rows:0})};
+ }}};
  const r=await worker.fetch(new Request('https://example.test/health'),env);
  assert.equal(r.status,200);
  assert.equal((await r.json()).ready,true);
+});
+test('health fails closed if the webhook D1 migration is missing',async()=>{
+ let queries=0;
+ const env={...authEnv,DB:{prepare(sql){
+  queries++;
+  assert.match(sql,/FROM telegram_updates/);
+  assert.match(sql,/FROM telegram_outbox/);
+  return {first:async()=>{throw Error('D1_ERROR: no such table: telegram_outbox')}};
+ }}};
+ const r=await worker.fetch(new Request('https://example.test/health'),env);
+ assert.equal(r.status,503);
+ const body=await r.json();
+ assert.equal(body.configured,true);
+ assert.equal(body.databaseReady,false);
+ assert.equal(body.ready,false);
+ assert.equal(queries,1);
+});
+test('health rejects malformed schema-probe results rather than claiming readiness',async()=>{
+ const env={...authEnv,DB:{prepare(){return {first:async()=>({inbox_rows:0,outbox_rows:null})}}}};
+ const r=await worker.fetch(new Request('https://example.test/health'),env);
+ assert.equal(r.status,503);
+ assert.equal((await r.json()).ready,false);
 });
 
 test('content-length above limit is rejected before body processing',async()=>{
@@ -99,7 +125,7 @@ function fakeD1(){
      const row=outbox.get(id);if(!row||row.status!=='sending')return null;
      row.status='sent';return {id:1};
     }
-    if(sql==='SELECT 1 AS ok')return {ok:1};
+    if(sql.includes('FROM telegram_updates')&&sql.includes('FROM telegram_outbox'))return {inbox_rows:updates.size,outbox_rows:outbox.size};
     throw Error('Unexpected first SQL: '+sql);
    },
    async run(){
