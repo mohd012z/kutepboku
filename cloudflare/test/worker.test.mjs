@@ -164,3 +164,20 @@ test('malformed callback actor is ignored without DB access',async()=>{
  const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body}),authEnv);
  assert.equal(r.status,200);
 });
+
+test('secondary update status failure cannot negate a confirmed Telegram send',async()=>{
+ const db=fakeD1(),original=globalThis.fetch,originalPrepare=db.prepare;let sends=0;
+ db.prepare=function(sql){
+  if(sql.startsWith("UPDATE telegram_updates SET status='sent'"))return {bind(){return {run:async()=>{throw Error('secondary status write unavailable')}}}};
+  return originalPrepare(sql);
+ };
+ globalThis.fetch=async()=>{sends++;return Response.json({ok:true,result:{message_id:81}})};
+ try{
+  const env={...authEnv,DB:db},body=JSON.stringify({update_id:704,message:{from:{id:123},chat:{id:123},text:'/menu'}});
+  const send=()=>worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body}),env);
+  assert.equal((await send()).status,200);
+  assert.equal((await send()).status,200);
+  assert.equal(sends,1);
+  assert.equal(db.outbox.get(704).status,'sent');
+ }finally{globalThis.fetch=original}
+});
