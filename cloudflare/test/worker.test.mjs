@@ -80,3 +80,69 @@ test('negative content-length is rejected before database access',async()=>{
  const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:{...authHeaders,'content-length':'-1'},body:'{}'}),authEnv);
  assert.equal(r.status,400);
 });
+
+function fakeD1(){
+ const updates=new Map(),outbox=new Map();
+ function statement(sql,args=[]){
+  return {
+   sql,args,
+   bind(...values){return statement(sql,values)},
+   async first(){
+    const id=args[0];
+    if(sql.startsWith('SELECT status FROM telegram_updates'))return updates.has(id)?{status:updates.get(id)}:null;
+    if(sql.startsWith('SELECT status FROM telegram_outbox'))return outbox.has(id)?{status:outbox.get(id).status}:null;
+    if(sql.startsWith("UPDATE telegram_outbox SET status='sending'")){
+     const row=outbox.get(id);if(!row||row.status!=='pending')return null;
+     row.status='sending';row.attempts++;return {id:1};
+    }
+    if(sql.startsWith("UPDATE telegram_outbox SET status='sent'")){
+     const row=outbox.get(id);if(!row||row.status!=='sending')return null;
+     row.status='sent';return {id:1};
+    }
+    if(sql==='SELECT 1 AS ok')return {ok:1};
+    throw Error('Unexpected first SQL: '+sql);
+   },
+   async run(){
+    const id=args[0];
+    if(sql.startsWith("UPDATE telegram_updates SET status='sent'")){updates.set(id,'sent');return {success:true}}
+    if(sql.startsWith("UPDATE telegram_outbox SET status='uncertain'")){
+     const row=outbox.get(id);if(row?.status==='sending')row.status='uncertain';
+     return {success:true};
+    }
+    throw Error('Unexpected run SQL: '+sql);
+   }
+  };
+ }
+ return {updates,outbox,prepare:statement,async batch(statements){
+  for(const s of statements){
+   const sql=s.sql,args=s.args;
+   if(sql.startsWith('INSERT INTO telegram_updates'))updates.set(args[0],'received');
+   else if(sql.startsWith('INSERT INTO telegram_outbox'))outbox.set(args[0],{status:'pending',attempts:0});
+   else throw Error('Unexpected batch SQL: '+sql);
+  }
+ }};
+}
+test('duplicate authorized update is delivered only once in mock D1',async()=>{
+ const db=fakeD1(),original=globalThis.fetch;let sends=0;
+ globalThis.fetch=async()=>{sends++;return Response.json({ok:true,result:{message_id:7}})};
+ try{
+  const env={...authEnv,DB:db},body=JSON.stringify({update_id:700,message:{from:{id:123},chat:{id:123},text:'/menu'}});
+  for(let i=0;i<2;i++){
+   const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body}),env);
+   assert.equal(r.status,200);
+  }
+  assert.equal(sends,1);assert.equal(db.outbox.get(700).status,'sent');
+ }finally{globalThis.fetch=original}
+});
+test('ambiguous Telegram send remains uncertain and is never automatically resent',async()=>{
+ const db=fakeD1(),original=globalThis.fetch;let sends=0;
+ globalThis.fetch=async()=>{sends++;throw Error('simulated lost Telegram response')};
+ try{
+  const env={...authEnv,DB:db},body=JSON.stringify({update_id:701,message:{from:{id:123},chat:{id:123},text:'/start'}});
+  const send=()=>worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body}),env);
+  assert.equal((await send()).status,503);
+  assert.equal(db.outbox.get(701).status,'uncertain');
+  assert.equal((await send()).status,503);
+  assert.equal(sends,1);
+ }finally{globalThis.fetch=original}
+});
