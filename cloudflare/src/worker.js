@@ -17,7 +17,23 @@ export default {async fetch(request,env){
  if(path==="/health"&&request.method==="GET"){
   const configured=!!(env.DB&&env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_WEBHOOK_SECRET&&env.TELEGRAM_ALLOWED_USER_IDS);
   let databaseReady=false;
-  if(configured){try{const row=await env.DB.prepare("SELECT (SELECT COUNT(*) FROM telegram_updates) AS inbox_rows, (SELECT COUNT(*) FROM telegram_outbox) AS outbox_rows").first();databaseReady=Number.isSafeInteger(row?.inbox_rows)&&row.inbox_rows>=0&&Number.isSafeInteger(row?.outbox_rows)&&row.outbox_rows>=0;}catch{databaseReady=false;}}
+  // A table-name-only COUNT(*) probe can report ready for incompatible legacy tables.
+  // D1 PRAGMA metadata checks required columns without scanning user data.
+  if(configured && typeof env.DB.prepare==="function"){
+   try{
+    const [inbox,outbox]=await Promise.all([
+     env.DB.prepare("PRAGMA table_info(telegram_updates)").all(),
+     env.DB.prepare("PRAGMA table_info(telegram_outbox)").all()
+    ]);
+    const hasColumns=(result,required)=>{
+     if(!Array.isArray(result?.results))return false;
+     const columns=new Set(result.results.map(row=>row?.name));
+     return required.every(name=>columns.has(name));
+    };
+    databaseReady=hasColumns(inbox,["update_id","status"]) &&
+     hasColumns(outbox,["id","update_id","chat_id","reply_text","status","attempts"]);
+   }catch{databaseReady=false;}
+  }
   return Response.json({service:"msasoup-telegram",configured,databaseReady,ready:configured&&databaseReady},{status:configured&&databaseReady?200:503});
  }
  if(path!=="/telegram"||request.method!=="POST")return new Response("Not found",{status:404});
