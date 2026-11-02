@@ -70,6 +70,8 @@ export default {async fetch(request,env){
   const current=await env.DB.prepare("SELECT status FROM telegram_outbox WHERE update_id=?").bind(id).first();
   if(!current)throw Error("Outbox row missing");
   if(current.status==="sent"){
+   // Reconcile a secondary status lag without ever re-sending a confirmed message.
+   await env.DB.prepare("UPDATE telegram_updates SET status='sent' WHERE update_id=? AND status!='sent'").bind(id).run().catch(()=>{});
    if(callback?.id)await telegram(env,"answerCallbackQuery",{callback_query_id:callback.id}).catch(()=>{});
    return new Response("OK");
   }
