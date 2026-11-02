@@ -181,3 +181,17 @@ test('secondary update status failure cannot negate a confirmed Telegram send',a
   assert.equal(db.outbox.get(704).status,'sent');
  }finally{globalThis.fetch=original}
 });
+
+test('duplicate update repairs secondary status after confirmed send without resend',async()=>{
+ const db=fakeD1(),original=globalThis.fetch;let sends=0;
+ globalThis.fetch=async()=>{sends++;return Response.json({ok:true,result:{message_id:82}})};
+ try{
+  const env={...authEnv,DB:db},body=JSON.stringify({update_id:705,message:{from:{id:123},chat:{id:123},text:'/menu'}});
+  const send=()=>worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body}),env);
+  assert.equal((await send()).status,200);
+  db.updates.set(705,'received');
+  assert.equal((await send()).status,200);
+  assert.equal(sends,1);
+  assert.equal(db.updates.get(705),'sent');
+ }finally{globalThis.fetch=original}
+});
