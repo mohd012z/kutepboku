@@ -1,0 +1,32 @@
+name: MSASoup Cloudflare Worker tests
+on:
+  push:
+    branches:
+      - feature/cloudflare-telegram-webhook
+    paths:
+      - 'cloudflare/**'
+      - '.github/workflows/msasoup-worker-tests.yml'
+  pull_request:
+    paths:
+      - 'cloudflare/**'
+      - '.github/workflows/msasoup-worker-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: msasoup-worker-tests-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  worker-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check
+        run: node --check cloudflare/src/worker.js && node --check cloudflare/test/worker.test.mjs
+      - name: Run Worker tests
+        working-directory: cloudflare
+        run: npm test
