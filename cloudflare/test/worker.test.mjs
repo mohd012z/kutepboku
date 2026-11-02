@@ -55,34 +55,49 @@ test('health is 503 when D1 adapter is unavailable',async()=>{
  assert.equal(data.databaseReady,false);
  assert.equal(data.ready,false);
 });
-test('health is ready only when both webhook D1 tables exist (including empty tables)',async()=>{
- const env={...authEnv,DB:{prepare(sql){
-  assert.match(sql,/FROM telegram_updates/);
-  assert.match(sql,/FROM telegram_outbox/);
-  return {first:async()=>({inbox_rows:0,outbox_rows:0})};
- }}};
- const r=await worker.fetch(new Request('https://example.test/health'),env);
+const validSchema={
+ telegram_updates:['update_id','status'],
+ telegram_outbox:['id','update_id','chat_id','reply_text','status','attempts']
+};
+function schemaDb(schema=validSchema){
+ const queries=[];
+ return {queries,prepare(sql){
+  const match=/^PRAGMA table_info\\((telegram_updates|telegram_outbox)\\)$/.exec(sql);
+  assert.ok(match,'unexpected schema probe: '+sql);
+  queries.push(match[1]);
+  return {all:async()=>({results:(schema[match[1]]||[]).map(name=>({name}))})};
+ }};
+}
+test('health accepts empty D1 tables with all required columns',async()=>{
+ const db=schemaDb();
+ const r=await worker.fetch(new Request('https://example.test/health'),{...authEnv,DB:db});
  assert.equal(r.status,200);
  assert.equal((await r.json()).ready,true);
+ assert.deepEqual(db.queries,['telegram_updates','telegram_outbox']);
 });
 test('health fails closed if the webhook D1 migration is missing',async()=>{
- let queries=0;
- const env={...authEnv,DB:{prepare(sql){
-  queries++;
-  assert.match(sql,/FROM telegram_updates/);
-  assert.match(sql,/FROM telegram_outbox/);
-  return {first:async()=>{throw Error('D1_ERROR: no such table: telegram_outbox')}};
- }}};
- const r=await worker.fetch(new Request('https://example.test/health'),env);
+ const db=schemaDb({telegram_updates:validSchema.telegram_updates});
+ const r=await worker.fetch(new Request('https://example.test/health'),{...authEnv,DB:db});
  assert.equal(r.status,503);
  const body=await r.json();
  assert.equal(body.configured,true);
  assert.equal(body.databaseReady,false);
  assert.equal(body.ready,false);
- assert.equal(queries,1);
 });
-test('health rejects malformed schema-probe results rather than claiming readiness',async()=>{
- const env={...authEnv,DB:{prepare(){return {first:async()=>({inbox_rows:0,outbox_rows:null})}}}};
+test('health rejects legacy tables missing required delivery columns',async()=>{
+ const db=schemaDb({...validSchema,telegram_outbox:['id','update_id','status']});
+ const r=await worker.fetch(new Request('https://example.test/health'),{...authEnv,DB:db});
+ assert.equal(r.status,503);
+ assert.equal((await r.json()).ready,false);
+});
+test('health rejects malformed schema metadata rather than claiming readiness',async()=>{
+ const env={...authEnv,DB:{prepare(){return {all:async()=>({results:null})}}}};
+ const r=await worker.fetch(new Request('https://example.test/health'),env);
+ assert.equal(r.status,503);
+ assert.equal((await r.json()).ready,false);
+});
+test('health fails closed on D1 schema query errors',async()=>{
+ const env={...authEnv,DB:{prepare(){return {all:async()=>{throw Error('D1 unavailable')}}}}};
  const r=await worker.fetch(new Request('https://example.test/health'),env);
  assert.equal(r.status,503);
  assert.equal((await r.json()).ready,false);
