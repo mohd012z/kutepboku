@@ -48,6 +48,11 @@ export default {async fetch(request,env){
  let raw="";
  if(reader){
   const decoder=new TextDecoder("utf-8",{fatal:true});
+  // Distinguish malformed bytes (client error) from interrupted transport (retryable).
+  class InvalidUtf8Error extends Error {}
+  const decode=(chunk,options)=>{
+   try{return decoder.decode(chunk,options)}catch{throw new InvalidUtf8Error()}
+  };
   let bytes=0;
   try{
    while(true){
@@ -55,10 +60,12 @@ export default {async fetch(request,env){
     if(done)break;
     bytes+=value.byteLength;
     if(bytes>65536){await reader.cancel().catch(()=>{});return new Response("Too large",{status:413});}
-    raw+=decoder.decode(value,{stream:true});
+    raw+=decode(value,{stream:true});
    }
-   raw+=decoder.decode();
-  }catch{return new Response("Invalid UTF-8",{status:400});}
+   raw+=decode();
+  }catch(error){
+   return error instanceof InvalidUtf8Error ? new Response("Invalid UTF-8",{status:400}) : new Response("Body unavailable",{status:503});
+  }finally{reader.releaseLock();}
  }
  let update;try{update=JSON.parse(raw);}catch{return new Response("Bad JSON",{status:400});}
  if(!Number.isSafeInteger(update?.update_id)||update.update_id<0)return new Response("Bad update",{status:400});
