@@ -96,7 +96,13 @@ export default {async fetch(request,env){
   if(current.status!=="pending")return new Response("Invalid delivery state",{status:503});
   const claimed=await env.DB.prepare("UPDATE telegram_outbox SET status='sending',attempts=attempts+1 WHERE update_id=? AND status='pending' RETURNING id").bind(id).first();
   if(!claimed)return new Response("Concurrent delivery in progress",{status:503});
-  await telegram(env,"sendMessage",{chat_id:chat.id,...response});
+  // A 200/ok response is not proof that Telegram accepted the message for this chat.
+  // Never mark a send as confirmed without a matching Message receipt.
+  const receipt=await telegram(env,"sendMessage",{chat_id:chat.id,...response});
+  if(!Number.isSafeInteger(receipt?.message_id)||receipt.message_id<=0||
+     !Number.isSafeInteger(receipt?.chat?.id)||receipt.chat.id!==chat.id){
+   throw Error("Telegram send receipt unverified");
+  }
   const finalized=await env.DB.prepare("UPDATE telegram_outbox SET status='sent' WHERE update_id=? AND status='sending' RETURNING id").bind(id).first();
   if(!finalized)throw Error("Outbox finalization failed");
   // The outbox is authoritative after Telegram acknowledges delivery. A secondary status update must not turn a confirmed send into a retryable failure.
