@@ -41,10 +41,10 @@ def main():
         return 2
     url = webhook.get("url", "")
     print("Webhook ownership:", "PASS" if url == EXPECTED_WEBHOOK else "FAIL")
-    print("Webhook destination:", url or "<not set>")
+    print("Webhook destination:", "EXPECTED" if url == EXPECTED_WEBHOOK else ("UNSET" if not url else "DIFFERENT (redacted)"))
     print("Pending update count:", webhook.get("pending_update_count", "<unknown>"))
     print("Last delivery error date:", webhook.get("last_error_date", "<none>"))
-    print("Last delivery error message:", str(webhook.get("last_error_message", "<none>"))[:500])
+    print("Last delivery error present:", bool(webhook.get("last_error_message")))
     print("Allowed update types:", webhook.get("allowed_updates", "<default>"))
     if url != EXPECTED_WEBHOOK:
         print("STOP: inspect existing polling/webhook owner before changing any registration")
