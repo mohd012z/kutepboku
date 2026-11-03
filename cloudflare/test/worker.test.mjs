@@ -277,3 +277,32 @@ test('unauthorized callback does not send or acknowledge through Telegram',async
   assert.equal(calls,0);
  }finally{globalThis.fetch=original}
 });
+
+test('callback acknowledgement failure cannot trigger duplicate send',async()=>{
+ const db=fakeD1(),original=globalThis.fetch;let sends=0,acks=0;
+ globalThis.fetch=async(url)=>{
+  if(String(url).endsWith('/answerCallbackQuery')){acks++;throw Error('callback acknowledgement unavailable')}
+  sends++;return Response.json({ok:true,result:{message_id:91}});
+ };
+ try{
+  const env={...authEnv,DB:db};
+  const body=JSON.stringify({update_id:804,callback_query:{id:'callback-804',from:{id:123},data:'m:status',message:{chat:{id:123}}}});
+  const request=()=>worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body}),env);
+  assert.equal((await request()).status,200);
+  assert.equal((await request()).status,200);
+  assert.equal(sends,1);
+  assert.equal(acks,2);
+  assert.equal(db.outbox.get(804).status,'sent');
+ }finally{globalThis.fetch=original}
+});
+test('search command does not claim verified book results when provider is disconnected',async()=>{
+ const db=fakeD1(),original=globalThis.fetch;let payload;
+ globalThis.fetch=async(url,options)=>{if(String(url).endsWith('/sendMessage'))payload=JSON.parse(options.body);return Response.json({ok:true,result:{message_id:92}})};
+ try{
+  const body=JSON.stringify({update_id:805,message:{from:{id:123},chat:{id:123},text:'/search aviation'}});
+  const response=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body}),{...authEnv,DB:db});
+  assert.equal(response.status,200);
+  assert.match(payload.text,/not available/i);
+  assert.equal(db.outbox.get(805).status,'sent');
+ }finally{globalThis.fetch=original}
+});
