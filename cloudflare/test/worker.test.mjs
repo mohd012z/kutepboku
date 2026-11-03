@@ -237,3 +237,43 @@ test('duplicate update repairs secondary status after confirmed send without res
   assert.equal(db.updates.get(705),'sent');
  }finally{globalThis.fetch=original}
 });
+
+test('menu callback sends exactly one menu and acknowledges callback',async()=>{
+ const db=fakeD1(),original=globalThis.fetch,calls=[];
+ globalThis.fetch=async(url,options)=>{calls.push({method:String(url).split('/').pop(),payload:JSON.parse(options.body)});return Response.json({ok:true,result:{message_id:99}})};
+ try{
+  const env={...authEnv,DB:db};
+  const body=JSON.stringify({update_id:801,callback_query:{id:'callback-801',from:{id:123},data:'m:menu',message:{chat:{id:123}}}});
+  const request=()=>worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body}),env);
+  assert.equal((await request()).status,200);
+  assert.equal((await request()).status,200);
+  assert.equal(calls.filter(c=>c.method==='sendMessage').length,1);
+  assert.equal(calls[0].payload.reply_markup.inline_keyboard.length,2);
+  assert.equal(calls.filter(c=>c.method==='answerCallbackQuery').length,2);
+  assert.equal(db.outbox.get(801).status,'sent');
+ }finally{globalThis.fetch=original}
+});
+test('search callback states actual unavailability instead of fabricating results',async()=>{
+ const db=fakeD1(),original=globalThis.fetch,calls=[];
+ globalThis.fetch=async(url,options)=>{calls.push({method:String(url).split('/').pop(),payload:JSON.parse(options.body)});return Response.json({ok:true,result:{message_id:100}})};
+ try{
+  const env={...authEnv,DB:db};
+  const body=JSON.stringify({update_id:802,callback_query:{id:'callback-802',from:{id:123},data:'m:search',message:{chat:{id:123}}}});
+  const response=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body}),env);
+  assert.equal(response.status,200);
+  const sent=calls.find(c=>c.method==='sendMessage');
+  assert.ok(sent);
+  assert.match(sent.payload.text,/not available/i);
+  assert.equal(calls.filter(c=>c.method==='answerCallbackQuery').length,1);
+ }finally{globalThis.fetch=original}
+});
+test('unauthorized callback does not send or acknowledge through Telegram',async()=>{
+ const original=globalThis.fetch;let calls=0;
+ globalThis.fetch=async()=>{calls++;throw Error('should not call Telegram')};
+ try{
+  const body=JSON.stringify({update_id:803,callback_query:{id:'callback-803',from:{id:999},data:'m:menu',message:{chat:{id:999}}}});
+  const response=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body}),authEnv);
+  assert.equal(response.status,200);
+  assert.equal(calls,0);
+ }finally{globalThis.fetch=original}
+});
