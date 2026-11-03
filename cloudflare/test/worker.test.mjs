@@ -41,6 +41,38 @@ test('invalid UTF-8 is rejected without D1 access',async()=>{
  const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body:bytes}),authEnv);
  assert.equal(r.status,400);
 });
+test('interrupted webhook streams return retryable 503 without D1 access',async()=>{
+ for(const error of [new Error('stream interrupted'),new TypeError('stream transport failure')]){
+  let reads=0;
+  const stream=new ReadableStream({pull(){throw error}});
+  const env={...authEnv,DB:{prepare(){reads++;throw Error('D1 must not be accessed')}}};
+  const request=new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body:stream,duplex:'half'});
+  const response=await worker.fetch(request,env);
+  assert.equal(response.status,503,'transport failure must remain retryable');
+  assert.equal(reads,0);
+ }
+});
+test('stream read failure after partial JSON remains retryable',async()=>{
+ let count=0;
+ const stream=new ReadableStream({pull(controller){
+  if(count++===0)controller.enqueue(new TextEncoder().encode('{"update_id":1'));
+  else controller.error(new Error('connection dropped'));
+ }});
+ const request=new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body:stream,duplex:'half'});
+ const response=await worker.fetch(request,authEnv);
+ assert.equal(response.status,503);
+});
+test('invalid UTF-8 split across stream chunks is a nonretryable 400',async()=>{
+ const stream=new ReadableStream({start(controller){
+  controller.enqueue(new Uint8Array([0xc3]));
+  controller.enqueue(new Uint8Array([0x28]));
+  controller.close();
+ }});
+ const request=new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body:stream,duplex:'half'});
+ const response=await worker.fetch(request,authEnv);
+ assert.equal(response.status,400);
+});
+
 test('oversized streamed body is rejected without D1 access',async()=>{
  const body=new ReadableStream({start(c){c.enqueue(new Uint8Array(32768));c.enqueue(new Uint8Array(32769));c.close()}});
  const r=await worker.fetch(new Request('https://example.test/telegram',{method:'POST',headers:authHeaders,body,duplex:'half'}),authEnv);
