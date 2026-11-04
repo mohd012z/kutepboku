@@ -56,14 +56,25 @@ class TelegramHandlerProxyTests(unittest.IsolatedAsyncioTestCase):
     async def test_category_callback_answers_and_searches(self):
         """The exact crash from the log: ui:cat calls callback.answer() before
         searching. Before the fix this raised NameError: name 'original' is not
-        defined. Now the tap is answered and the results are presented."""
+        defined. Now the tap is answered and the results are presented.
+        (Since 2026-11-04 the category button runs the AI research agent, so
+        the research network + LLM layers are stubbed to keep this offline.)"""
         async def provider(query):
             return [dict(BOOK)]
         update = self._callback_update("ui:cat:ml")
-        with patch.object(main, "verified_search", provider):
+        with patch.object(main, "verified_search", provider), \
+             patch.object(bot_router, "find_all",
+                          return_value={"topic": "machine learning",
+                                        "ebooks": [], "apps": []}), \
+             patch.object(bot_router, "gather_global", return_value={}), \
+             patch.object(bot_router, "research_summary", return_value=None):
             await telegram_handler(update, MagicMock())
         update.callback_query.answer.assert_awaited()          # no NameError
-        update.callback_query.message.reply_text.assert_awaited()  # results shown
+        update.callback_query.message.reply_text.assert_awaited()  # report shown
+        # the research report message (not the old plain-ebook list)
+        sent = update.callback_query.message.reply_text.await_args
+        joined = " ".join(sent.args)
+        self.assertIn("Research report", joined)
 
     async def test_delivery_link_callback_sends_url(self):
         bot_router.session_store().set_session(

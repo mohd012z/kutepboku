@@ -29,6 +29,8 @@ from auto_scout import (_TOOL_LOOKUP, _default_branch, deliver_zip,
                         trending_repos)
 from find_all import (_TOPIC_LOOKUP, find_all, find_all_keyboard,
                       find_all_message)
+from global_sources import gather_global
+from research_summary import research_summary
 from agent_skills import agent_skills
 from prompt_forge import forge_menu, forge_prompt, prompt_text
 
@@ -384,6 +386,14 @@ async def _run_command(action, user_id, store, message, search_provider):
         menu = find_menu()
         await message.reply_text(menu["text"], reply_markup=menu["reply_markup"])
         return
+    if action == "research":
+        store.set_session(user_id, "RESEARCH_TOPIC", {})
+        await message.reply_text(
+            "🔬 AI research agent — which subject? Reply with it (e.g. "
+            "\"machine learning\", \"forex trading\"). I'll gather open "
+            "ebooks, scan GLOBAL sources (GitHub, GitLab, npm, crates.io, "
+            "Docker Hub) and synthesize a digest. (❌ Cancel to stop.)")
+        return
     if action == "agent":
         try:
             await message.reply_text(agent_skills().summary_text())
@@ -441,6 +451,72 @@ async def _run_find_all(message, user_id, store, search_provider,
     await _reply_long(message, find_all_message(result)
                       + "\n\n🧠 +" + str(gained) + " XP → L" + str(level),
                       reply_markup=find_all_keyboard(result, token))
+
+
+async def _run_research(message, user_id, store, search_provider, topic):
+    """AI research agent for a subject: open ebooks + GLOBAL source scan
+    (GitHub, GitLab, npm, crates.io, Docker Hub) + one LLM synthesis pass.
+    LLM outage is fail-open (digest omitted, raw sources still delivered);
+    a dead source is dropped (gather_global is fail-open per source)."""
+    topic = str(topic)[:200]
+    await message.reply_text("🔬 Researching “" + topic + "” — scanning "
+                             "ebooks + global sources (GitHub, GitLab, npm, "
+                             "crates, Docker) + AI digest…")
+    try:
+        ebooks = (await search_provider(topic)) if search_provider is not None else []
+        if not isinstance(ebooks, list):
+            ebooks = []
+    except Exception:
+        ebooks = []
+    gh_apps = await asyncio.to_thread(
+        find_all, topic, key=None, ebooks=[],
+        client=requests)
+    gh_apps = gh_apps.get("apps") or []
+    sources = await asyncio.to_thread(gather_global, topic, 4)
+    # One LLM pass over the merged global list (apps are GitHub/curated).
+    digest = await asyncio.to_thread(research_summary, topic, gh_apps, sources)
+    n_global = sum(len(v) for v in sources.values())
+    n_total = len(gh_apps) + n_global
+    # Built-in agent: studying a whole subject is real study too.
+    try:
+        gained, level = agent_skills().record_search(
+            "research:" + topic, n_total, source="research")
+    except Exception:
+        gained, level = 0, 1
+    token = secrets.token_hex(6)
+    result = {"topic": topic, "ebooks": ebooks, "apps": gh_apps[:5],
+              "info": ""}
+    store.set_session(user_id, "FIND_RESULT",
+                      {"result": result, "sources": sources,
+                       "digest": digest or "", "fa_token": token})
+    await _reply_long(message,
+                      _research_message(topic, len(ebooks), n_global,
+                                        digest)
+                      + "\n\n🧠 +" + str(gained) + " XP → L" + str(level),
+                      reply_markup=find_all_keyboard(result, token))
+
+
+def _research_message(topic, n_books, n_global, digest):
+    lines = ["🔬 Research report — “" + topic + "”",
+             "",
+             "📚 Open ebooks: " + str(n_books),
+             "🌐 Global sources (npm / crates / Docker / GitLab + GitHub): "
+             + str(n_global)]
+    if digest:
+        lines.append("")
+        lines.append("🧠 AI digest")
+        lines.append(digest)
+    else:
+        lines.append("")
+        lines.append("🧠 AI digest unavailable just now (LLM timeout) — the "
+                     "source lists below are still the verified findings.")
+    if n_books == 0 and n_global == 0:
+        lines.append("")
+        lines.append("· No open-licensed ebooks and no registry hits "
+                     "matched — try a broader subject.")
+    lines.append("")
+    lines.append("Tap a book or an app below → its file / source zip.")
+    return "\n".join(lines)
 
 
 async def _send_repo_zip(update, user_id, store, item):
@@ -782,9 +858,18 @@ async def handle_update(update, context, *, search_provider=None, store=None):
                 if topic is None:
                     await callback.answer("Unknown category.", show_alert=True)
                     return
-                await callback.answer("🔎 Searching " + topic + "…")
-                await _search_and_present(callback.message, user_id, topic,
-                                          store, search_provider)
+                await callback.answer("🔬 Researching " + topic + "…")
+                await _run_research(callback.message, user_id, store,
+                                    search_provider, topic)
+                return
+        if data.startswith("res:"):
+            if data == "res:new":
+                store.set_session(user_id, "RESEARCH_TOPIC", {})
+                await callback.answer("")
+                await callback.message.reply_text(
+                    "🔬 AI research agent — which subject? Reply with it "
+                    "(e.g. \"machine learning\", \"forex trading\"). (❌ Cancel "
+                    "to stop.)")
                 return
         if data.startswith("termux:"):
             action = data[7:]
@@ -858,7 +943,7 @@ async def handle_update(update, context, *, search_provider=None, store=None):
         if action is not None:
             if state in ("SELECTING_BOOK", "CHOOSE_DELIVERY",
                          "MQL5_LISTING", "AUTO_LISTING", "FIND_TOPIC",
-                         "FIND_RESULT", "FORGE_TOPIC"):
+                         "FIND_RESULT", "FORGE_TOPIC", "RESEARCH_TOPIC"):
                 store.clear_session(user_id)
             await _run_command(action, user_id, store, message,
                                search_provider)
@@ -924,6 +1009,20 @@ async def handle_update(update, context, *, search_provider=None, store=None):
             return
         await _run_find_all(message, user_id, store, search_provider,
                             topic=topic)
+        return
+
+    # Research: a typed subject answers the pending "What subject?" prompt
+    if state == "RESEARCH_TOPIC":
+        if text in ("/cancel", "cancel", "Cancel"):
+            store.clear_session(user_id)
+            await message.reply_text("Cancelled.")
+            return
+        topic = _clean_query(text)
+        if not topic:
+            await message.reply_text("Which subject should I research? "
+                                     "e.g. \"machine learning\"")
+            return
+        await _run_research(message, user_id, store, search_provider, topic)
         return
 
     # mid-flow plain text starts a new action

@@ -140,10 +140,15 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
     async def test_category_callback_searches_topic(self):
         seen = []
         update = self.callback("ui:cat:chem")
-        await handle_update(update, MagicMock(), store=self.store,
-                            search_provider=self.provider(seen=seen))
+        with patch("bot_router.find_all",
+                   return_value={"topic": "chemistry", "ebooks": [], "apps": []}), \
+             patch("bot_router.gather_global", return_value={}), \
+             patch("bot_router.research_summary", return_value=None):
+            await handle_update(update, MagicMock(), store=self.store,
+                                search_provider=self.provider(seen=seen))
+        # the category button now runs the AI research agent (one ebook pass)
         self.assertEqual(seen, ["chemistry"])
-        self.assertEqual(self.store.get_session(12345)[0], "SELECTING_BOOK")
+        self.assertEqual(self.store.get_session(12345)[0], "FIND_RESULT")
 
     async def test_home_callback_renders_menu(self):
         update = self.callback("ui:home")
@@ -561,7 +566,7 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
     def test_bot_command_markup_shape(self):
         from ai_assistant import bot_command_markup
         commands = bot_command_markup()
-        self.assertEqual(len(commands), 19)
+        self.assertEqual(len(commands), 20)
         self.assertEqual(commands[0].command, "start")
         names = [c.command for c in commands]
         self.assertIn("find", names)

@@ -123,6 +123,7 @@ BOT_COMMANDS = [
     ("webscam", "Download any website to check for scams", "find:webscam"),
     ("learn", "Learning skill + school programs (curricula + LMS)", "find:learn"),
     ("agent", "Built-in agent: skill level & what it has learned", "agent"),
+    ("research", "AI research agent: ebooks + global sources + digest", "research"),
     ("help", "Instructions & how to use", "help"),
     ("cancel", "Stop the current action", "cancel"),
     ("status", "Admin diagnostics (admin only)", "admin"),
@@ -213,6 +214,8 @@ def home_menu():
     rows = []
     rows.append([{"text": "✨ Find ALL (ebooks + apps)",
                   "callback_data": "fa:menu"}])
+    rows.append([{"text": "🔬 Research any subject (AI agent)",
+                  "callback_data": "res:new"}])
     left, right = [], []
     for index, (key, label, _topic) in enumerate(CATEGORIES):
         (left if index % 2 == 0 else right).append(
