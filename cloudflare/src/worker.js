@@ -1,9 +1,10 @@
-const MENU={inline_keyboard:[[{text:"📚 Search",callback_data:"m:search"},{text:"ℹ️ Help",callback_data:"m:help"}],[{text:"📊 Status",callback_data:"m:status"}]]};
+import {research,researchReport,researchMenuMarkup,subjectTopic} from "./research.js";
+const MENU={inline_keyboard:[[{text:"📚 Search",callback_data:"m:search"},{text:"ℹ️ Help",callback_data:"m:help"}],[{text:"🔬 Research (AI agent)",callback_data:"res:menu"},{text:"📊 Status",callback_data:"m:status"}]]};
 function reply(command){
  if(command==="/start"||command==="/menu"||command==="m:menu")return {text:"📚 MSASoup menu",reply_markup:MENU};
- if(command==="/help"||command==="m:help")return {text:"Use /menu. The research engine is not connected to this Worker.",reply_markup:MENU};
- if(command==="/search"||command==="m:search")return {text:"Search is not available on this Worker yet. No search was started.",reply_markup:MENU};
- if(command==="/status"||command==="m:status")return {text:"📊 MSASoup status: Worker command handler active. Live webhook delivery and research engine availability are not confirmed by this message.",reply_markup:MENU};
+ if(command==="/help"||command==="m:help")return {text:"Use /menu. /research <subject> runs the AI research agent (ebooks + global sources + digest).",reply_markup:MENU};
+ if(command==="/search"||command==="m:search")return {text:"Book search is not available on this Worker yet — use /research <subject> for the AI research agent (ebooks + GitHub/GitLab/npm/crates/Docker + digest).",reply_markup:MENU};
+ if(command==="/status"||command==="m:status")return {text:"📊 MSASoup status: Worker command handler active. The research engine is wired to /research; live webhook delivery and Minda digest availability are confirmed per request.",reply_markup:MENU};
  return null;
 }
 function equal(a,b){const x=new TextEncoder().encode(a),y=new TextEncoder().encode(b);let d=x.length^y.length;for(let i=0;i<Math.max(x.length,y.length);i++)d|=(x[i]||0)^(y[i]||0);return d===0;}
@@ -74,8 +75,42 @@ export default {async fetch(request,env){
  const allowed=(env.TELEGRAM_ALLOWED_USER_IDS||"").split(",").map(x=>x.trim()).filter(Boolean);
  if(!allowed.includes(String(actor.id)))return new Response("OK");
  const command=callback?callback.data:(message?.text||"").trim().split(/\s+/)[0].split("@")[0].toLowerCase();
- const response=reply(command);if(!response)return new Response("OK");
- if(typeof env.DB.prepare!=="function"||typeof env.DB.batch!=="function")return new Response("Unavailable",{status:503});
+ const researchSubject=callback?null:((message?.text||"").trim().split(/\s+/).slice(1).map(x=>x.replace(/@[A-Za-z0-9_]+$/,"")).join(" ").trim());
+ const response=reply(command);
+ if(!response){
+  if(callback&&command.startsWith("res:")){
+   if(command==="res:menu"){
+    return await deliver({text:"🔬 Pick a subject — or type /research <subject>.",reply_markup:researchMenuMarkup()},update,chat,callback,env);
+   }
+   const topic=subjectTopic(command.slice(4));
+   if(!topic){
+    if(callback.id)await telegram(env,"answerCallbackQuery",{callback_query_id:callback.id}).catch(()=>{});
+    return new Response("OK");
+   }
+   try{
+    const report=await research(topic,env);
+    return await deliver({text:researchReport(report)},update,chat,callback,env);
+   }catch(e){
+    return await deliver({text:"🔬 Research for \""+topic+"\" failed while gathering sources: "+e.message+". Try again or use a broader subject."},update,chat,callback,env);
+   }
+  }
+  if(command==="/research"&&!callback){
+   if(!researchSubject||researchSubject.toLowerCase()==="menu"){
+    return await deliver({text:"🔬 Pick a subject — or type /research <subject>.",reply_markup:researchMenuMarkup()},update,chat,callback,env);
+   }
+   const startedAt=Date.now();
+   try{
+    const report=await research(researchSubject,env);
+    return await deliver({text:researchReport(report)},update,chat,callback,env);
+   }catch(e){
+    return await deliver({text:"🔬 Research for \""+researchSubject.slice(0,80)+"\" failed while gathering sources: "+e.message+". Try again or use a broader subject."},update,chat,callback,env);
+   }
+  }
+  return new Response("OK");
+ }
+ return await deliver(response,update,chat,callback,env);
+ async function deliver(response,update,chat,callback,env){
+  if(typeof env.DB.prepare!=="function"||typeof env.DB.batch!=="function")return new Response("Unavailable",{status:503});
  const id=update.update_id;
  try{
   let existing=await env.DB.prepare("SELECT status FROM telegram_updates WHERE update_id=?").bind(id).first();
@@ -120,4 +155,4 @@ export default {async fetch(request,env){
   await env.DB.prepare("UPDATE telegram_outbox SET status='uncertain' WHERE update_id=? AND status='sending'").bind(id).run().catch(()=>{});
   return new Response("Temporary delivery failure",{status:503});
  }
-}};
+ }}};
