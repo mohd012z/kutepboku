@@ -8,7 +8,6 @@ import requests
 from agent import get, licensed
 from ebook_search_pipeline import (
     dynamic_ebook_search,
-    llm_relevance_indices,
     openlicensed_search,
 )
 
@@ -54,18 +53,15 @@ def openlicensed_rights_checker(identifier, metadata):
 
 
 async def verified_search(query):
-    """Default search: key-free Internet Archive discovery + team-LLM
-    (OpenAI-compatible) relevance screening. No Google credentials required.
-
-    Runs off the event loop; unlicensed candidates are excluded before the LLM
-    ever sees them.
+    """Default search: key-free Internet Archive discovery, with explicit
+    license verification and no external relevance model dependency.
+    Runs off the event loop; unlicensed candidates are excluded.
     """
 
     def _run():
         return openlicensed_search(
             query,
             rights_checker=openlicensed_rights_checker,
-            relevance_checker=lambda topic, titles: llm_relevance_indices(topic, titles),
             max_results=15,
         )
 
