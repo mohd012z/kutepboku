@@ -133,32 +133,61 @@ test('gatherGlobal merges 5 sources, drops dead ones, floors noise',async()=>{
  }finally{globalThis.fetch=original}
 });
 
-test('research() gathers ebooks + global sources and LLM digest (fail-open LLM)',async()=>{
+test('research() works with NO Minda — Worker generates its own digest',async()=>{
+ const original=globalThis.fetch;let llmCalled=0;
+ globalThis.fetch=async(url)=>{
+  const u=String(url);
+  if(u.includes('chat/completions')){llmCalled++;throw new Error('LLM must not be called')}
+  if(u.startsWith('https://api.github.com/'))return Response.json({items:
+   [{full_name:'gh/ml',description:'a framework',stargazers_count:9}]});
+  if(u.startsWith('https://gitlab.com/'))return Response.json([]);
+  if(u.startsWith('https://registry.npmjs.org/'))return Response.json({objects:[]});
+  if(u.startsWith('https://crates.io/'))return Response.json({crates:[]});
+  if(u.startsWith('https://hub.docker.com/'))return Response.json({results:[]});
+  if(u.includes('archive.org/'))return Response.json({response:{docs:[{identifier:'ia-one',title:'IA Book'}]}});
+  if(u.includes('gutenberg.org/'))return new Response('<feed></feed>');
+  return new Response('{}',{status:200});
+ };
+ try{
+  const r=await research('machine learning',{}); // no MINDA_* at all
+  assert.equal(llmCalled,0);
+  assert.equal(r.llm,false);
+  assert.ok(typeof r.digest==='string'&&r.digest.length>0);
+  assert.match(r.digest,/Deterministic Worker digest/i);
+  assert.match(r.digest,/gh\/ml/);
+  assert.match(researchReport(r),/AI digest \(Worker agent\)/);
+ }finally{globalThis.fetch=original}
+});
+
+test('research() gathers ebooks + global sources, LLM fail-open falls back to Worker digest',async()=>{
  const original=globalThis.fetch;
  globalThis.fetch=async(url)=>{
   const u=String(url);
-  if(u.includes('chat/completions'))throw new Error('minda down'); // LLM fail-open
-  if(u.startsWith('https://api.github.com/search/repositories'))
-   return Response.json({items:[{full_name:'gh/one',description:'d',stargazers_count:9}]});
+  if(u.startsWith('https://minda.test/'))throw new Error('minda down'); // LLM fail-open
+  if(u.startsWith('https://api.github.com/'))return Response.json({items:
+   [{full_name:'gh/one',description:'d',stargazers_count:9}]});
   if(u.startsWith('https://gitlab.com/'))return Response.json([]);
   if(u.startsWith('https://registry.npmjs.org/'))return Response.json({objects:[]});
   if(u.startsWith('https://crates.io/'))return Response.json({crates:[]});
   if(u.startsWith('https://hub.docker.com/'))return Response.json({results:[]});
   if(u.includes('archive.org/advancedsearch.php'))
-   return Response.json({response:{docs:[{identifier:'ia-one',title:'IA Book'}]}});
+   return Response.json({response:{docs:[{identifier:'ia-one',title:'IA Book',author_name:['A Author']}]}});
   if(u.includes('gutenberg.org/ebooks/search.opds/'))
    return new Response('<feed></feed>');
   return new Response('{}',{status:200});
  };
  try{
-  const r=await research('machine learning',{}); // no MINDA_* -> digest null
+  const r=await research('machine learning',{MINDA_BASE_URL:'https://minda.test/v1',
+   MINDA_API_KEY:'k',MINDA_MODEL:'m'});
   assert.equal(r.nEbooks,1);
   assert.equal(r.nGlobal,1);
   assert.ok(r.sources.github[0].url.startsWith('https://github.com/'));
-  assert.equal(r.digest,null);
+  // LLM down -> deterministic fallback, still non-null
+  assert.equal(r.llm,false);
+  assert.ok(typeof r.digest==='string');
   const text=researchReport(r);
   assert.match(text,/Research report/);
-  assert.match(text,/AI digest unavailable/);
+  assert.match(text,/AI digest \(Worker agent\)/);
   assert.match(text,/gh\/one/);
   assert.match(text,/ia-one/);
  }finally{globalThis.fetch=original}

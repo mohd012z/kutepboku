@@ -159,7 +159,8 @@ async function searchEbooks(query, limit = 6) {
         if (!doc.identifier) continue;
         out.push({ id: "ia-" + doc.identifier,
           url: "https://archive.org/details/" + doc.identifier,
-          desc: (doc.title || "") + (doc.author_name ? " — " + String(doc.author_name).join(", ") : ""),
+          desc: (doc.title || "") + (doc.author_name ? " — " +
+            (Array.isArray(doc.author_name) ? doc.author_name.join(", ") : String(doc.author_name)) : ""),
           count: 0, source: "IA (CC-BY)" });
         if (out.length >= limit * 2) break;
       }
@@ -179,18 +180,49 @@ async function searchEbooks(query, limit = 6) {
   return out.slice(0, limit * 2);
 }
 
-// ---- LLM digest (one call, fail-open) -------------------------------------
+// Deterministic field summary — the worker is the agent, so this works with
+// ZERO external AI services (no Minda). Overview from verified source stats,
+// key resources = top-count sources with their registry descriptions.
+export function deterministicDigest(topic, sources) {
+  const all = [];
+  for (const [key, items] of Object.entries(sources || {})) {
+    for (const it of items) all.push({ key, id: it.id, desc: it.desc || "", count: it.count || 0 });
+  }
+  const n = all.length;
+  if (!n) {
+    return "OVERVIEW: No sources were found in the public registries just now.\n" +
+      "NOTES: The subject may be too narrow, or a registry was rate-limited.";
+  }
+  const keys = [...new Set(all.map((a) => a.key))];
+  const top = [...all].sort((a, b) => b.count - a.count).slice(0, 5);
+  const lines = ["OVERVIEW:"];
+  lines.push("- Verified sources: " + n + " across " + keys.length +
+    " registries (" + keys.join(", ") + ").");
+  const best = top[0];
+  if (best.count) {
+    lines.push("- Most-used in the field: " + best.id + " (" + best.key + ", " +
+      best.count + " popularity).");
+  }
+  lines.push("- Descriptions below are the registries' own; verify before adopting.");
+  lines.push("");
+  lines.push("KEY RESOURCES:");
+  for (const t of top) lines.push("- " + t.id + " [" + t.key + "] — " +
+    (t.desc || "no description").slice(0, 90));
+  lines.push("");
+  lines.push("NOTES: Deterministic Worker digest (no external AI service); " +
+    "counts are registry popularity, not endorsements.");
+  return lines.join("\n").slice(0, 1200);
+}
 
+// One LLM digest pass. Used ONLY when env.MINDA_BASE_URL + MINDA_API_KEY are
+// set — otherwise research falls back to deterministicDigest. Fail-open null.
 export async function researchDigest(topic, sources, { base, apiKey, model, timeout = 20000 } = {}) {
   if (!base || !apiKey) return null;
   const lines = [];
   for (const [key, items] of Object.entries(sources || {})) {
     for (const it of items) lines.push("[" + key + "] " + it.id + " — " + (it.desc || ""));
   }
-  if (!lines.length) {
-    return "OVERVIEW: No sources were found in the public registries just now.\n" +
-      "NOTES: The subject may be too narrow, or a registry was rate-limited.";
-  }
+  if (!lines.length) return null;
   const prompt =
     "You are a research assistant compiling a field digest for Telegram. Using ONLY the " +
     "numbered source list (real packages/repos/images), write a concise digest.\n" +
@@ -242,12 +274,21 @@ export function subjectTopic(key) {
 export async function research(subject, env = {}) {
   const sources = await gatherGlobal(subject, 4);
   const ebooks = await searchEbooks(subject, 4);
-  const digest = await researchDigest(subject, sources, {
-    base: env.MINDA_BASE_URL, apiKey: env.MINDA_API_KEY,
-    model: env.MINDA_MODEL || "llm_model_fp8",
-  });
+  // The Worker IS the agent: deterministic digest always, LLM digest only
+  // when MINDA_* secrets are configured (optional enhancement).
+  let digest = null;
+  if (env.MINDA_BASE_URL && env.MINDA_API_KEY) {
+    try {
+      digest = await researchDigest(subject, sources, {
+        base: env.MINDA_BASE_URL, apiKey: env.MINDA_API_KEY,
+        model: env.MINDA_MODEL || "llm_model_fp8",
+      });
+    } catch { digest = null; }
+  }
+  const llm = !!digest;
+  if (!digest) digest = deterministicDigest(subject, sources);
   const nGlobal = Object.values(sources).reduce((n, v) => n + v.length, 0);
-  return { subject, sources, ebooks, digest, nGlobal, nEbooks: ebooks.length };
+  return { subject, sources, ebooks, digest, llm, nGlobal, nEbooks: ebooks.length };
 }
 
 export function researchReport(r) {
@@ -256,7 +297,7 @@ export function researchReport(r) {
   lines.push("🌐 Global sources (GitHub/GitLab/npm/crates/Docker): " + r.nGlobal);
   lines.push("");
   if (r.digest) {
-    lines.push("🧠 AI digest");
+    lines.push("🧠 " + (r.llm ? "AI digest (LLM)" : "AI digest (Worker agent)"));
     lines.push(r.digest);
   } else {
     lines.push("🧠 AI digest unavailable just now (LLM off/timeout) — the " +
