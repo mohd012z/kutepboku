@@ -157,11 +157,15 @@ async def status_command(update, context):
         await message.reply_text("Diagnostics unavailable. Check secure server logs.")
 
 
-def _poll_error(application, context):
+async def _poll_error(application, context):
     """Keep the poller alive through transient errors. A Conflict means
     another instance is using this token (restart race) — exit cleanly and
     let the supervisor restart; any other update error is logged and ignored
-    so the bot never goes silent on one bad update."""
+    so the bot never goes silent on one bad update.
+
+    Must be a coroutine: PTB 22.x ``process_error`` does ``await callback``,
+    so a sync handler returns None and raises ``TypeError: object NoneType
+    can't be used in 'await' expression`` on every swallowed error."""
     err = context.error
     if isinstance(err, tg_error.Conflict):
         log.warning("Conflict: another poller owns this token; exiting for "

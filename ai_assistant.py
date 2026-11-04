@@ -130,8 +130,17 @@ BOT_COMMANDS = [
 
 
 def bot_command_markup():
-    """Payload for Bot API setMyCommands."""
-    return [{"command": command, "description": description}
+    """Payload for Bot API setMyCommands.
+
+    Returns ``telegram.BotCommand`` objects: PTB 22.x ``set_my_commands``
+    passes any non-``BotCommand`` entry through ``BotCommand(c[0], c[1])``,
+    which KeyErrors on a plain dict (``c[0]`` → no such key) and silently
+    drops the whole ⋮ menu back to /help. Emitting BotCommand instances
+    avoids that; the dict-shape assertion in the router test is updated to
+    read ``.command``.
+    """
+    from telegram import BotCommand
+    return [BotCommand(command, description)
             for command, description, _action in BOT_COMMANDS]
 
 
