@@ -30,7 +30,7 @@ from auto_scout import (_TOOL_LOOKUP, _default_branch, deliver_zip,
 from find_all import (_TOPIC_LOOKUP, find_all, find_all_keyboard,
                       find_all_message)
 from global_sources import gather_global
-from research_summary import research_summary
+from research_summary import deterministic_digest, research_summary
 from agent_skills import agent_skills
 from prompt_forge import forge_menu, forge_prompt, prompt_text
 
@@ -473,8 +473,16 @@ async def _run_research(message, user_id, store, search_provider, topic):
         client=requests)
     gh_apps = gh_apps.get("apps") or []
     sources = await asyncio.to_thread(gather_global, topic, 4)
-    # One LLM pass over the merged global list (apps are GitHub/curated).
-    digest = await asyncio.to_thread(research_summary, topic, gh_apps, sources)
+    # The bot IS the agent: LLM digest only when Minda is configured, else a
+    # deterministic digest built from the verified sources (no Minda needed).
+    llm = False
+    try:
+        digest = await asyncio.to_thread(research_summary, topic, gh_apps, sources)
+    except Exception:
+        digest = None
+    llm = digest is not None
+    if digest is None:
+        digest = await asyncio.to_thread(deterministic_digest, topic, gh_apps, sources)
     n_global = sum(len(v) for v in sources.values())
     n_total = len(gh_apps) + n_global
     # Built-in agent: studying a whole subject is real study too.
@@ -488,15 +496,15 @@ async def _run_research(message, user_id, store, search_provider, topic):
               "info": ""}
     store.set_session(user_id, "FIND_RESULT",
                       {"result": result, "sources": sources,
-                       "digest": digest or "", "fa_token": token})
+                       "digest": digest or "", "llm": llm, "fa_token": token})
     await _reply_long(message,
                       _research_message(topic, len(ebooks), n_global,
-                                        digest)
+                                        digest, llm)
                       + "\n\n🧠 +" + str(gained) + " XP → L" + str(level),
                       reply_markup=find_all_keyboard(result, token))
 
 
-def _research_message(topic, n_books, n_global, digest):
+def _research_message(topic, n_books, n_global, digest, llm=False):
     lines = ["🔬 Research report — “" + topic + "”",
              "",
              "📚 Open ebooks: " + str(n_books),
@@ -504,7 +512,8 @@ def _research_message(topic, n_books, n_global, digest):
              + str(n_global)]
     if digest:
         lines.append("")
-        lines.append("🧠 AI digest")
+        lines.append("🧠 " + ("AI digest (LLM)" if llm
+                               else "AI digest (agent — no Minda)"))
         lines.append(digest)
     else:
         lines.append("")

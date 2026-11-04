@@ -48,6 +48,46 @@ def build_source_lines(apps, sources, limit=_QUOTA):
     return lines[:limit]
 
 
+def deterministic_digest(topic, apps, sources):
+    """Worker-style field summary built ONLY from the verified source list —
+    no LLM required (the agent runs without any external AI service)."""
+    all_items = []
+    for a in apps or []:
+        all_items.append(("GitHub" if not a.get("source") else a["source"],
+                          a.get("id", ""), a.get("desc") or a.get("title") or "",
+                          int(a.get("stars") or a.get("count") or 0)))
+    for key, items in (sources or {}).items():
+        for it in items:
+            all_items.append((key, it.get("id", ""), it.get("desc") or "",
+                              int(it.get("count") or 0)))
+    n = len(all_items)
+    if not n:
+        return ("OVERVIEW: No sources were found in the public registries "
+                "just now.\nNOTES: The subject may be too narrow, or a "
+                "registry was rate-limited.")
+    keys = []
+    for key, _id, _desc, _c in all_items:
+        if key not in keys:
+            keys.append(key)
+    top = sorted(all_items, key=lambda t: -t[3])[:5]
+    lines = ["OVERVIEW:"]
+    lines.append("- Verified sources: %d across %d registries (%s)."
+                 % (n, len(keys), ", ".join(keys)))
+    if top and top[0][3]:
+        lines.append("- Most-used in the field: %s (%s, %d popularity)."
+                     % (top[0][1], top[0][0], top[0][3]))
+    lines.append("- Descriptions below are the registries' own; verify "
+                 "before adopting.")
+    lines.append("")
+    lines.append("KEY RESOURCES:")
+    for key, ident, desc, _c in top:
+        lines.append("- %s [%s] — %s" % (ident, key, (desc or "no description")[:90]))
+    lines.append("")
+    lines.append("NOTES: Deterministic agent digest (no external AI service); "
+                 "counts are registry popularity, not endorsements.")
+    return "\n".join(lines)[:1200]
+
+
 def research_summary(topic, apps, sources, *, client=requests, base_url=None,
                      api_key=None, model=None, timeout=40):
     """One digest call. Returns a string or None (fail-open)."""
