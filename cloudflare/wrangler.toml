@@ -12,4 +12,6 @@ database_id = "55b8f334-eba2-452d-bbc9-96a9169a8c12"
 # TELEGRAM_BOT_TOKEN
 # TELEGRAM_WEBHOOK_SECRET
 # TELEGRAM_ALLOWED_USER_IDS
+# MINDA_API_KEY  (optional — AI research digest; research still works without it)
+# MINDA_BASE_URL (optional — OpenAI-compatible base, e.g. https://minda.cyberaman.my/v1)
 # Production webhook cutover requires identity, ownership, HTTPS, and rollback checks.
