@@ -33,6 +33,8 @@ from global_sources import gather_global
 from research_summary import deterministic_digest, research_summary
 from agent_skills import agent_skills
 from prompt_forge import forge_menu, forge_prompt, prompt_text
+from gemini_jio import (gemini_menu, generate_activation_link,
+                        gemini_result_text, how_it_works_text)
 
 # callback key ("mt5:ea") -> (market, kind)
 _MQL5_LOOKUP = {key: (market, kind) for key, _label, market, kind in MQL5_LISTINGS}
@@ -402,6 +404,10 @@ async def _run_command(action, user_id, store, message, search_provider):
         return
     if action == "prompt_menu":
         menu = forge_menu()
+        await message.reply_text(menu["text"], reply_markup=menu["reply_markup"])
+        return
+    if action == "gemini_menu":
+        menu = gemini_menu()
         await message.reply_text(menu["text"], reply_markup=menu["reply_markup"])
         return
     if action.startswith("find:"):
@@ -776,6 +782,29 @@ async def handle_update(update, context, *, search_provider=None, store=None):
                     "(optionally add context on a 2nd line after a blank "
                     "line). I'll forge a strong, evidence-first prompt.\n\n"
                     "❌ Cancel to back out.")
+                return
+        if data.startswith("gj:"):
+            action = data[3:]
+            if action == "menu":
+                menu = gemini_menu()
+                await callback.edit_message_text(menu["text"],
+                                                 reply_markup=menu["reply_markup"])
+                return
+            if action == "how":
+                await callback.edit_message_text(
+                    how_it_works_text(),
+                    reply_markup={"inline_keyboard": [
+                        [{"text": "⚡ Generate my link",
+                          "callback_data": "gj:gen"}],
+                        [{"text": "🏠 Home", "callback_data": "ui:home"}]]},
+                    disable_web_page_preview=True)
+                return
+            if action == "gen":
+                await callback.answer("⚡ Generating…")
+                result = await asyncio.to_thread(
+                    generate_activation_link, verify=False)
+                await callback.message.reply_text(
+                    gemini_result_text(result), disable_web_page_preview=True)
                 return
         if data.startswith("fae:"):
             # "Show all ebooks" from a Find ALL result -> standard book list

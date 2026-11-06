@@ -59,6 +59,9 @@ HELP_TEXT = (
     "fabricate) and quality gates.\n"
     "• 📣 AI Marketing — a ready-made agent: AI ad/marketing ebooks + the "
     "top AI marketing / ad-automation tools.\n"
+    "• 🎁 Jio AI Gemini Pro (/gemini) — generate the activation link "
+    "(serviceactivation.google.com/subscription/new/<token>) or read exactly "
+    "how Google's Reseller Subscription API mints it.\n"
     "• 🪞 Web & App Cloning (/clone) — how website/app cloning works + the "
     "top cloner tools (one-command AI site-to-app, React rebuilders, Go "
     "cloner) + related ebooks.\n"
@@ -86,6 +89,7 @@ HELP_TEXT = (
     "/find — Find ALL (ebooks + apps) for a topic\n"
     "/prompt — Prompt Forge (strong AI prompts for any capability)\n"
     "/marketing — AI advertising & marketing (ebooks + apps)\n"
+    "/gemini — Jio AI Gemini Pro: generate the activation link + how it's made\n"
     "/clone — web & app cloning: info + tools\n"
     "/hacking — hacking & pen-test: info + tools\n"
     "/reverse — reverse engineering (apk): info + tools\n"
@@ -118,6 +122,7 @@ BOT_COMMANDS = [
      "prompt_menu"),
     ("marketing", "AI advertising & marketing agent (ebooks + apps)",
      "find:marketing"),
+    ("gemini", "Jio AI Gemini Pro link maker", "gemini_menu"),
     ("clone", "Web & app cloning — info + top tools", "find:cloning"),
     ("tginfo", "Check a Telegram username (details + scam signals)", "find:tginfo"),
     ("webscam", "Download any website to check for scams", "find:webscam"),
@@ -231,10 +236,12 @@ def home_menu():
         {"text": "📣 AI Marketing", "callback_data": "fa:run:marketing"},
         {"text": "🪞 Web & App Cloning", "callback_data": "fa:run:cloning"}])
     rows.append([
-        {"text": "🕵️ Hacking & Pen-Test", "callback_data": "fa:run:hacking"},
-        {"text": "🔬 Reverse Engineering", "callback_data": "fa:run:reverse"}])
+        {"text": "🎁 Jio AI Gemini Pro link", "callback_data": "gj:menu"},
+        {"text": "🕵️ Hacking & Pen-Test", "callback_data": "fa:run:hacking"}])
     rows.append([
-        {"text": "📱 Termux (menu)", "callback_data": "termux:menu"},
+        {"text": "🔬 Reverse Engineering", "callback_data": "fa:run:reverse"},
+        {"text": "📱 Termux (menu)", "callback_data": "termux:menu"}])
+    rows.append([
         {"text": "🔎 Telegram User Check", "callback_data": "fa:run:tginfo"}])
     rows.append([
         {"text": "🕸️ Download Site (Scam)", "callback_data": "fa:run:webscam"},
