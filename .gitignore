@@ -23,3 +23,5 @@ msasoup.env
 
 # runtime agent state (written by the live process)
 state/
+msasoup-production.json
+msasoup-sandbox.json
