@@ -2,6 +2,7 @@
 import os
 import secrets
 
+from apk_research_menu import keyboard as apk_keyboard, handle_callback as apk_callback
 from session_manager import SessionManager
 from search_pagination import build_search_keyboard, new_search_session, process_search_callback
 
@@ -30,6 +31,15 @@ async def handle_update(update, context, *, search_provider=None, store=None):
         return
     callback = getattr(update, "callback_query", None)
     if callback is not None:
+        if isinstance(callback.data, str) and callback.data.startswith("apk:"):
+            if os.getenv("MSASOUP_APK_RESEARCH_STAGING", "") != "1":
+                await callback.answer("Research menu disabled", show_alert=True)
+                return
+            result = apk_callback(callback.data, user_id=user_id, allowed_user_ids=allowed)
+            await callback.answer("" if result["ok"] else result["error"], show_alert=not result["ok"])
+            if result["ok"]:
+                await callback.edit_message_text(result["text"], reply_markup=apk_keyboard())
+            return
         result = process_search_callback(
             user_id, callback.data, load_session=store.get_session,
             save_session=store.set_session, clear_session=store.clear_session)
@@ -50,6 +60,12 @@ async def handle_update(update, context, *, search_provider=None, store=None):
     if message is None or not isinstance(getattr(message, "text", None), str):
         return
     text = message.text.strip()
+    if text == "/apk_research":
+        if os.getenv("MSASOUP_APK_RESEARCH_STAGING", "") != "1":
+            await message.reply_text("Research menu disabled.")
+        else:
+            await message.reply_text("APK Research — synthetic offline preview", reply_markup=apk_keyboard())
+        return
     if text == "/cancel":
         store.clear_session(user_id)
         await message.reply_text("Cancelled.")
