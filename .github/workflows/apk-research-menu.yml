@@ -13,4 +13,5 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m unittest discover -s tests -p 'test_apk_research_menu.py' -v
-      - run: python -m py_compile apk_research_menu.py tests/test_apk_research_menu.py
+      - run: python -m unittest discover -s tests -p 'test_apk_research_router.py' -v
+      - run: python -m py_compile apk_research_menu.py bot_router.py main.py tests/test_apk_research_menu.py tests/test_apk_research_router.py
