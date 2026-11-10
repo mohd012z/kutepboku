@@ -1,0 +1,18 @@
+name = "msasoup-telegram"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "msasoup-db"
+database_id = "55b8f334-eba2-452d-bbc9-96a9169a8c12"
+
+# Set encrypted Worker secrets in Cloudflare; never commit their values:
+# TELEGRAM_BOT_TOKEN
+# TELEGRAM_WEBHOOK_SECRET
+# TELEGRAM_ALLOWED_USER_IDS
+# MINDA_API_KEY   (OPTIONAL — LLM research digest; without it the Worker
+#                 generates its own deterministic digest — no Minda needed)
+# MINDA_BASE_URL  (OPTIONAL — OpenAI-compatible base for the LLM digest)
+# Production webhook cutover requires identity, ownership, HTTPS, and rollback checks.

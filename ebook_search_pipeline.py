@@ -4,9 +4,9 @@ Two discovery backends:
   * legacy Google Custom Search + Gemini (`dynamic_ebook_search`, `gemini_relevant`)
     — retained for compatibility and existing tests; needs GOOGLE_API_KEY +
     SEARCH_ENGINE_ID (+ optional GEMINI_API_KEY).
-  * key-free Internet Archive + team-LLM (`openlicensed_search`,
-    `llm_relevance_indices`) — the default used by the live runner; no Google
-    credentials required.
+  * key-free Internet Archive (`openlicensed_search`) — discovery does not
+    require an LLM or Google credentials; optional relevance screening must
+    be supplied explicitly by the caller.
 
 Both are discovery candidates, not proof of redistribution rights; rights are
 verified against Internet Archive metadata (fail closed) before delivery.
@@ -106,20 +106,17 @@ def dynamic_ebook_search(query, *, client=requests, relevance_checker=None,
     return results
 
 
-# --- key-free: Internet Archive + team LLM (default) --------------------------
+# --- key-free: Internet Archive with optional caller-provided screening ----
 
 def llm_relevance_indices(topic, titles, *, client=requests, base_url=None,
-                          api_key=None, model=None, timeout=20):
+                          api_key=None, model="default", timeout=20):
     """Ask the team LLM (OpenAI-compatible) which numbered titles are on-topic.
 
     Returns a set of 1-based indices the model judged relevant, or None when the
     model is unavailable or returns a malformed payload (treated as "unscreened",
     never as a negative judgment).
     """
-    base_url = base_url if base_url is not None else os.getenv("MINDA_BASE_URL")
-    api_key = api_key if api_key is not None else os.getenv("MINDA_API_KEY")
-    model = model if model is not None else os.getenv("MINDA_MODEL", "llm_model_fp8")
-    if not base_url or not api_key or not titles:
+    if not base_url or not api_key or not model or not titles:
         return None
     numbered = "\n".join(f"{i}. {str(t)[:200]}" for i, t in enumerate(titles, 1))
     prompt = (

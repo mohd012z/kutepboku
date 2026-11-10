@@ -96,6 +96,12 @@ class KeyFreeDiscoveryTests(unittest.TestCase):
         self.assertIsNone(llm_relevance_indices("python", ["A"],
                                                 client=client, base_url="http://x", api_key="k"))
 
+    def test_generic_relevance_requires_explicit_credentials(self):
+        client = Mock()
+        self.assertIsNone(llm_relevance_indices("python", ["A"], client=client,
+                                               base_url=None, api_key=None))
+        client.post.assert_not_called()
+
     def test_openlicensed_empty_query(self):
         self.assertEqual(openlicensed_search("", rights_checker=lambda *a: True), [])
 
