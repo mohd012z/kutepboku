@@ -7,6 +7,29 @@ from search_pagination import build_search_keyboard, new_search_session, process
 
 db = None
 
+# Leading words users often prepend to a book topic; stripped before the
+# search so "Search ebook bbma" is treated as the topic "bbma".
+_QUERY_FILLER = (
+    "search for", "search ebook", "search e-books", "search books", "search book",
+    "search about", "search", "find for", "find me a", "find me", "find an",
+    "find the", "find a", "find", "look for", "look up", "lookup", "look up",
+    "ebooks about", "ebook about", "ebooks of", "ebook of", "books about",
+    "book about", "books on", "book on", "about",
+)
+
+
+def _clean_query(text):
+    """Strip leading filler words, keeping only the actual topic."""
+    t = (text or "").strip()
+    prev = None
+    while prev != t and t:
+        prev = t
+        for filler in _QUERY_FILLER:
+            if t.lower().startswith(filler):
+                t = t[len(filler):].strip(" ,:;-")
+                break
+    return t or (text or "").strip()
+
 
 def session_store():
     global db
@@ -65,9 +88,15 @@ async def handle_update(update, context, *, search_provider=None, store=None):
     if search_provider is None:
         await message.reply_text("Search is not configured yet.")
         return
-    results = await search_provider(text)
+    results = await search_provider(_clean_query(text))
     if not isinstance(results, list) or not results:
-        await message.reply_text("No verified books found.")
+        await message.reply_text(
+            "No open-licensed books found for " + text[:60] + ".\n"
+            "Only explicitly CC-licensed (open) documents are offered, so "
+            "results are sparse — try a broad topic (e.g. machine learning, "
+            "chemistry, philosophy) or the web UI:"
+            "\nhttps://mohd012z.github.io/kutepboku/"
+        )
         return
     token = secrets.token_hex(6)
     data = new_search_session(text, results, token)

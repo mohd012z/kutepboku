@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from bot_router import handle_update
+from bot_router import handle_update, _clean_query
 from session_manager import SessionManager
 
 
@@ -84,6 +84,44 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         self.store.set_session(12345, "SELECTING_BOOK", {"results": []})
         await handle_update(self.message("/cancel"), MagicMock(), store=self.store)
         self.assertEqual(self.store.get_session(12345), ("IDLE", {}))
+
+    def test_clean_query_strips_filler(self):
+        self.assertEqual(_clean_query("Search ebook bbma"), "bbma")
+        self.assertEqual(_clean_query("search for python"), "python")
+        self.assertEqual(_clean_query("Find a book about chemistry"), "chemistry")
+        self.assertEqual(_clean_query("look up machine learning"), "machine learning")
+        self.assertEqual(_clean_query("Search ebook"), "Search ebook")  # filler only -> unchanged
+
+    def test_clean_query_keeps_real_topics(self):
+        self.assertEqual(_clean_query("bbma"), "bbma")
+        self.assertEqual(_clean_query("machine learning"), "machine learning")
+        self.assertEqual(_clean_query(""), "")
+
+    async def test_query_stripped_before_search(self):
+        self.store.set_session(12345, "WAITING_FOR_QUERY", {})
+        seen = []
+
+        async def provider(query):
+            seen.append(query)
+            return [{"id": "book_1", "title": "X"}]
+
+        await handle_update(self.message("Search ebook bbma"), MagicMock(),
+                            store=self.store, search_provider=provider)
+        self.assertEqual(seen, ["bbma"])
+
+    async def test_no_results_shows_guidance(self):
+        self.store.set_session(12345, "WAITING_FOR_QUERY", {})
+
+        async def provider(query):
+            return []
+
+        update = self.message("bbma")
+        await handle_update(update, MagicMock(), store=self.store, search_provider=provider)
+        # stayed in WAITING_FOR_QUERY (not advanced to selection)
+        self.assertEqual(self.store.get_session(12345)[0], "WAITING_FOR_QUERY")
+        reply = update.message.reply_text.await_args.args[0]
+        self.assertIn("No open-licensed books found for bbma", reply)
+        self.assertIn("https://mohd012z.github.io/kutepboku/", reply)
 
 
 if __name__ == "__main__":
