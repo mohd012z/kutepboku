@@ -21,30 +21,34 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q .
       - name: Run offline unit tests with coverage
-        run: coverage run --source=. --omit='*/tests/*,*/test_*.py' -m unittest discover -s tests -v
+        run: coverage run --branch --source=. --omit='*/tests/*,*/test_*.py' -m unittest discover -s tests -v
       - name: Coverage summary and reports
         if: always()
         run: |
           if [ -f .coverage ]; then
             coverage report -m
+            echo "::group::Telegram Vault line and branch coverage"
+            coverage report --include="telegram_vault.py" -m
+            echo "::endgroup::"
+            coverage json -o coverage.json
+            python parse_vault_coverage.py coverage.json
             coverage xml -o coverage.xml
             coverage html -d htmlcov
           else
             echo 'Coverage data not generated.'
           fi
-      - name: Upload coverage XML
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-xml
-          path: coverage.xml
-          retention-days: 14
-          if-no-files-found: ignore
-      - name: Upload HTML coverage report
-        if: always()
+      - name: Assert coverage reports exist
+        run: |
+          test -s coverage.xml
+          test -s coverage.json
+          test -s htmlcov/index.html
+      - name: Upload coverage reports
         uses: actions/upload-artifact@v4
         with:
           name: code-coverage-report
-          path: htmlcov/
+          path: |
+            coverage.xml
+            coverage.json
+            htmlcov/
           retention-days: 14
-          if-no-files-found: ignore
+          if-no-files-found: error
