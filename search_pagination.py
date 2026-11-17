@@ -1,5 +1,6 @@
 """Session-aware Telegram inline keyboard pagination (framework-neutral)."""
 import math
+import copy
 import re
 
 ITEMS_PER_PAGE = 3
@@ -42,7 +43,7 @@ def build_search_keyboard(results, page_index, session_token):
     return {"inline_keyboard": keyboard}
 
 
-def process_search_callback(user_id, callback_data, *, load_session, save_session, clear_session):
+def process_search_callback(user_id, callback_data, *, load_session, save_session, clear_session, compare_and_set=None):
     """Validate a callback against a persisted session, then return a UI action.
 
     load_session(user_id) -> (state, data), save_session(user_id, state, data).
@@ -60,11 +61,16 @@ def process_search_callback(user_id, callback_data, *, load_session, save_sessio
     state, data = load_session(user_id)
     if state != SEARCH_STATE or data.get("search_token") != token:
         return {"ok": False, "error": "This search has expired. Start a new search."}
+    original_data = copy.deepcopy(data)
     results = data.get("results", [])
     if not isinstance(results, list) or len(results) > MAX_RESULTS:
         return {"ok": False, "error": "Invalid search results"}
     if action == "c":
-        clear_session(user_id)
+        if compare_and_set is not None:
+            if not compare_and_set(user_id, SEARCH_STATE, original_data, "IDLE", {}):
+                return {"ok": False, "error": "Search changed. Please retry."}
+        else:
+            clear_session(user_id)
         return {"ok": True, "action": "cancel"}
     if len(parts) != 4:
         return {"ok": False, "error": "Invalid callback"}
@@ -76,7 +82,11 @@ def process_search_callback(user_id, callback_data, *, load_session, save_sessio
         if page >= total:
             return {"ok": False, "error": "Page out of range"}
         data["current_page"] = page
-        save_session(user_id, SEARCH_STATE, data)
+        if compare_and_set is not None:
+            if not compare_and_set(user_id, SEARCH_STATE, original_data, SEARCH_STATE, data):
+                return {"ok": False, "error": "Search changed. Please retry."}
+        else:
+            save_session(user_id, SEARCH_STATE, data)
         return {"ok": True, "action": "page", "page": page,
                 "pages": total, "keyboard": build_search_keyboard(results, page, token)}
     if not BOOK_ID.fullmatch(parts[3]):
@@ -89,7 +99,11 @@ def process_search_callback(user_id, callback_data, *, load_session, save_sessio
     if not book:
         return {"ok": False, "error": "Book not on current page"}
     data["selected_book"] = book
-    save_session(user_id, "CHOOSE_DELIVERY", data)
+    if compare_and_set is not None:
+        if not compare_and_set(user_id, SEARCH_STATE, original_data, "CHOOSE_DELIVERY", data):
+            return {"ok": False, "error": "Search changed. Please retry."}
+    else:
+        save_session(user_id, "CHOOSE_DELIVERY", data)
     return {"ok": True, "action": "selected", "book": book}
 
 
