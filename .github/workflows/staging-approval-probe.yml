@@ -1,0 +1,25 @@
+name: Staging Approval Probe
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: telegram-staging-approval-probe
+  cancel-in-progress: false
+
+jobs:
+  probe-gate:
+    name: Verify telegram-staging environment approval
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: telegram-staging
+    steps:
+      - name: Confirm gate was released
+        shell: bash
+        run: |
+          echo "Approval probe reached its first step."
+          echo "Environment: telegram-staging"
+          echo "No repository checkout, Telegram API calls, or secret references."
+          echo "Verify the waiting-for-review event in the run history separately."
