@@ -20,3 +20,5 @@ logs/archives/*.zip
 .vscode/
 .idea/
 msasoup.env
+
+*.poller.lock
