@@ -31,3 +31,49 @@ class BackupTests(unittest.TestCase):
             self.assertEqual(client.post.call_count, 2)
             encrypted = client.post.call_args_list[0].kwargs["files"]["document"][1]
             self.assertTrue(Fernet(client_key).decrypt(encrypted).startswith(b"SQLite format 3"))
+
+
+    def test_upload_unconfirmed_does_not_pin(self):
+        with TemporaryDirectory() as folder:
+            db = Path(folder) / "sessions.db"
+            with sqlite3.connect(db) as connection:
+                connection.execute("CREATE TABLE user_sessions (user_id INTEGER PRIMARY KEY)")
+            client = Mock()
+            client.post.return_value.json.return_value = {"ok": False}
+            with self.assertRaisesRegex(RuntimeError, "upload not confirmed"):
+                backup_database_snapshot(db_path=db, token="123:fake", channel_id="-100123",
+                    encryption_key=Fernet.generate_key(), client=client)
+            self.assertEqual(client.post.call_count, 1)
+
+    def test_uploaded_but_pin_rejected_is_failure(self):
+        with TemporaryDirectory() as folder:
+            db = Path(folder) / "sessions.db"
+            with sqlite3.connect(db) as connection:
+                connection.execute("CREATE TABLE user_sessions (user_id INTEGER PRIMARY KEY)")
+            client = Mock()
+            upload = Mock()
+            upload.json.return_value = {"ok": True, "result": {"message_id": 42}}
+            pin = Mock()
+            pin.json.return_value = {"ok": False, "result": False}
+            client.post.side_effect = [upload, pin]
+            with self.assertRaisesRegex(RuntimeError, "pin was not confirmed"):
+                backup_database_snapshot(db_path=db, token="123:fake", channel_id="-100123",
+                    encryption_key=Fernet.generate_key(), client=client)
+            self.assertEqual(client.post.call_count, 2)
+
+    def test_pin_http_error_is_failure(self):
+        with TemporaryDirectory() as folder:
+            db = Path(folder) / "sessions.db"
+            with sqlite3.connect(db) as connection:
+                connection.execute("CREATE TABLE user_sessions (user_id INTEGER PRIMARY KEY)")
+            client = Mock()
+            upload = Mock()
+            upload.json.return_value = {"ok": True, "result": {"message_id": 42}}
+            pin = Mock()
+            from requests import HTTPError
+            pin.raise_for_status.side_effect = HTTPError("pin rejected")
+            client.post.side_effect = [upload, pin]
+            with self.assertRaises(HTTPError):
+                backup_database_snapshot(db_path=db, token="123:fake", channel_id="-100123",
+                    encryption_key=Fernet.generate_key(), client=client)
+

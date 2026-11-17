@@ -106,6 +106,17 @@ def send(session, token, chat, name, data, caption):
         raise RuntimeError("Telegram delivery failed (HTTP %d)" % response.status_code)
 
 
+def resolve_scout_query(environ=None):
+    """Prefer explicit manual overrides without changing scheduled defaults."""
+    environ = os.environ if environ is None else environ
+    override = (environ.get("CUSTOM_QUERY") or "").strip()
+    scheduled = (environ.get("SCOUT_QUERY") or "").strip()
+    query = override or scheduled or "python programming"
+    if len(query) > 200:
+        raise ValueError("Scout query exceeds 200 characters")
+    return query
+
+
 def run():
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     chat = os.environ.get("TELEGRAM_CHAT_ID", "")
@@ -118,7 +129,7 @@ def run():
     state = Path("state/history.json")
     history = json.loads(state.read_text()) if state.exists() else []
     delivered = set(history)
-    query = os.environ.get("SCOUT_QUERY", "python programming")
+    query = resolve_scout_query()
     for book in discover(session, query):
         if not book.get("public_scan_b"):
             continue

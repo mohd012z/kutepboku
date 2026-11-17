@@ -42,5 +42,46 @@ class AgentTests(unittest.TestCase):
                 agent.download(Mock(), "https://example.com/book.pdf")
 
 
+    def test_run_uses_manual_override_without_network(self):
+        from tempfile import TemporaryDirectory
+        from pathlib import Path
+        import os
+        with TemporaryDirectory() as folder:
+            history = Path(folder) / "history.json"
+            with patch.dict(os.environ, {
+                "CUSTOM_QUERY": "Embedded Rust Architecture",
+                "SCOUT_QUERY": "python programming",
+                "TELEGRAM_BOT_TOKEN": "123:abc",
+                "TELEGRAM_CHAT_ID": "12345",
+            }), patch.object(agent, "verify_bot", return_value={
+                "username": "mysoupsearchbot", "id": 7,
+            }), patch.object(agent, "discover", return_value=[]) as discover, patch.object(
+                agent, "send"
+            ) as send, patch.object(agent, "Path", side_effect=lambda value: history if value == "state/history.json" else Path(value)):
+                agent.run()
+                discover.assert_called_once()
+                self.assertEqual(discover.call_args.args[1], "Embedded Rust Architecture")
+                send.assert_not_called()
+
+    def test_run_uses_scheduled_query_without_network(self):
+        from tempfile import TemporaryDirectory
+        from pathlib import Path
+        import os
+        with TemporaryDirectory() as folder:
+            history = Path(folder) / "history.json"
+            with patch.dict(os.environ, {
+                "SCOUT_QUERY": "Systems Architecture",
+                "TELEGRAM_BOT_TOKEN": "123:abc",
+                "TELEGRAM_CHAT_ID": "12345",
+            }, clear=True), patch.object(agent, "verify_bot", return_value={
+                "username": "mysoupsearchbot", "id": 7,
+            }), patch.object(agent, "discover", return_value=[]) as discover, patch.object(
+                agent, "send"
+            ) as send, patch.object(agent, "Path", side_effect=lambda value: history if value == "state/history.json" else Path(value)):
+                agent.run()
+                self.assertEqual(discover.call_args.args[1], "Systems Architecture")
+                send.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
