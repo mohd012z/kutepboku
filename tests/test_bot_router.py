@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from bot_router import handle_update, _clean_query
+from find_all import find_all_keyboard
 from session_manager import SessionManager
 
 BOOK = {"id": "book_1", "title": "Test book",
@@ -566,7 +567,7 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
     def test_bot_command_markup_shape(self):
         from ai_assistant import bot_command_markup
         commands = bot_command_markup()
-        self.assertEqual(len(commands), 21)
+        self.assertEqual(len(commands), 22)
         self.assertEqual(commands[0].command, "start")
         names = [c.command for c in commands]
         self.assertIn("find", names)
@@ -577,6 +578,8 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("tginfo", names)
         self.assertIn("webscam", names)
         self.assertIn("gemini", names)
+        self.assertIn("research", names)
+        self.assertIn("ask", names)
         for entry in commands:
             self.assertTrue(entry.description)
             self.assertLessEqual(len(entry.description), 256)
@@ -613,6 +616,89 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             update.callback_query.edit_message_text.await_args.args[0],
             "agent test")
+
+    # ---- research: 10+ outputs + how-to-apply -----------------------------
+    def _apps(self, n=12):
+        return [{"id": "r/%d" % i, "title": "r%d" % i,
+                 "url": "https://github.com/r/%d" % i, "stars": n - i}
+                for i in range(n)]
+
+    async def test_research_command_surfaces_10_plus_outputs(self):
+        # /research prompts for a subject; a typed subject runs the flow.
+        with patch("bot_router.find_all",
+                   return_value={"topic": "machine learning", "ebooks": [],
+                                 "apps": self._apps(12)}), \
+             patch("bot_router.gather_global", return_value={}), \
+             patch("bot_router.research_summary", return_value=None):
+            update = self.message("/research")
+            await handle_update(update, MagicMock(), store=self.store,
+                                search_provider=self.provider())
+            self.assertEqual(self.store.get_session(12345)[0], "RESEARCH_TOPIC")
+            update = self.message("machine learning")
+            await handle_update(update, MagicMock(), store=self.store,
+                                search_provider=self.provider())
+        state, sdata = self.store.get_session(12345)
+        self.assertEqual(state, "FIND_RESULT")
+        self.assertGreaterEqual(len(sdata["result"]["apps"]), 10)
+        kb = find_all_keyboard(sdata["result"], sdata["fa_token"])
+        app_btns = [b["callback_data"] for row in kb["inline_keyboard"]
+                    for b in row if b["callback_data"].startswith("fap:")]
+        self.assertGreaterEqual(len(app_btns), 10)
+        # the no-LLM digest still teaches how to apply the findings
+        self.assertIn("HOW TO APPLY", sdata["digest"])
+        self.agent_mock.record_search.assert_called()
+        self.assertTrue(self.agent_mock.record_search.call_args.kwargs["source"]
+                        == "research")
+
+    # ---- ask: answer any question -----------------------------------------
+    async def test_ask_command_uses_llm_answer(self):
+        with patch("bot_router.ask_question",
+                   return_value="RAG = retrieval-augmented generation.") as aq:
+            update = self.message("what is RAG?")
+            self.store.set_session(12345, "ASK_TOPIC", {})
+            await handle_update(update, MagicMock(), store=self.store,
+                                search_provider=self.provider())
+        aq.assert_called_once_with("what is RAG?")
+        self.assertIn("retrieval-augmented generation",
+                      update.message.reply_text.await_args.args[0])
+        self.assertIn("🧠 +", update.message.reply_text.await_args.args[0])
+        self.assertEqual(self.store.get_session(12345)[0], "IDLE")
+        self.agent_mock.record_search.assert_called_once()
+        self.assertEqual(self.agent_mock.record_search.call_args.kwargs["source"],
+                         "ask")
+
+    async def test_ask_command_llm_down_falls_back_to_research_hint(self):
+        with patch("bot_router.ask_question", return_value=None):
+            self.store.set_session(12345, "ASK_TOPIC", {})
+            update = self.message("how do I backtest an EA?")
+            await handle_update(update, MagicMock(), store=self.store,
+                                search_provider=self.provider())
+        self.assertIn("/research", update.message.reply_text.await_args.args[0])
+
+    async def test_ask_new_callback_prompts_for_question(self):
+        update = self.callback("ask:new")
+        await handle_update(update, MagicMock(), store=self.store)
+        self.assertEqual(self.store.get_session(12345)[0], "ASK_TOPIC")
+        self.assertIn("Ask me anything",
+                      update.callback_query.message.reply_text.await_args.args[0])
+
+    async def test_idle_question_routes_to_ask(self):
+        with patch("bot_router.ask_intent",
+                   return_value={"intent": "chat", "topic": None}), \
+             patch("bot_router.ask_question",
+                   return_value="Playwright drives a real browser.") as aq:
+            update = self.message("how do I automate a browser?")
+            await handle_update(update, MagicMock(), store=self.store,
+                                search_provider=self.provider())
+        aq.assert_called_once()
+
+    async def test_idle_greeting_still_gives_blurb(self):
+        with patch("bot_router.ask_intent",
+                   return_value={"intent": "chat", "topic": None}):
+            update = self.message("hello there")
+            await handle_update(update, MagicMock(), store=self.store,
+                                search_provider=self.provider())
+        self.assertIn("eBooks", update.message.reply_text.await_args.args[0])
 
     # ---- filler helpers (from PR #11) -------------------------------------
     def test_clean_query_strips_filler(self):

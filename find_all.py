@@ -14,7 +14,10 @@ import requests
 GITHUB_SEARCH = "https://api.github.com/search/repositories"
 USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
-APP_LIMIT = 8
+# How many apps/repos a Find ALL / research result can surface. Bumped from 8
+# to 12 so a research report shows 10+ tappable outputs (the user asked for
+# 10+; research merges GitHub + global registry items up to this cap).
+APP_LIMIT = 12
 
 # Studied sub-topics of "AI agent integration + web automation".
 # (key, label, github_query, ebook_topic, info)
@@ -355,7 +358,9 @@ def find_all_keyboard(result, token):
     if result["ebooks"]:
         rows.append([{"text": "📚 Show all " + str(len(result["ebooks"]))
                       + " ebooks", "callback_data": "fae:" + token}])
-    for i, app in enumerate(result["apps"][:5]):
+    # Show every app the result carries (up to APP_LIMIT, 12) as tappable
+    # buttons so a research report surfaces 10+ outputs, not 5.
+    for i, app in enumerate(result["apps"][:APP_LIMIT]):
         rows.append([{"text": "📱 " + str(app["title"])[:52],
                       "callback_data": "fap:" + token + ":" + str(i)}])
     rows.append([{"text": "🔎 Find another", "callback_data": "fa:run"},

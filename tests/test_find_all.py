@@ -128,6 +128,28 @@ class MessageKeyboardTests(unittest.TestCase):
         self.assertIn("fa:run", data)
         self.assertIn("ui:home", data)
 
+    def test_keyboard_renders_10_plus_app_buttons(self):
+        # A research report must surface 10+ tappable outputs, not 5.
+        apps = [{"title": "App %d" % i, "url": "https://github.com/a/%d" % i}
+                for i in range(12)]
+        kb = find_all_keyboard({"topic": "t", "ebooks": [], "apps": apps},
+                               "abcdef123456")
+        data = [btn["callback_data"] for row in kb["inline_keyboard"]
+                for btn in row]
+        app_btns = [d for d in data if d.startswith("fap:abcdef123456:")]
+        self.assertGreaterEqual(len(app_btns), 10)
+        self.assertIn("fap:abcdef123456:11", data)  # the 12th item is buttoned
+
+    def test_keyboard_caps_at_app_limit(self):
+        apps = [{"title": "App %d" % i, "url": "https://github.com/a/%d" % i}
+                for i in range(30)]
+        kb = find_all_keyboard({"topic": "t", "ebooks": [], "apps": apps},
+                               "abcdef123456")
+        data = [btn["callback_data"] for row in kb["inline_keyboard"]
+                for btn in row]
+        app_btns = [d for d in data if d.startswith("fap:abcdef123456:")]
+        self.assertEqual(len(app_btns), find_all_mod.APP_LIMIT)
+
 
     def test_studied_subtopic_includes_info(self):
         client = mock.Mock()

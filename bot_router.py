@@ -18,8 +18,8 @@ from session_manager import SessionManager
 from search_pagination import (build_search_keyboard, new_search_session,
                                process_search_callback)
 from ai_assistant import (BOT_COMMANDS, HELP_TEXT, _chat_reply, ask_intent,
-                          auto_menu, category_topic, command_action,
-                          deliver_file, delivery_keyboard,
+                          ask_question, auto_menu, category_topic,
+                          command_action, deliver_file, delivery_keyboard,
                           delivery_nav_keyboard, find_menu, home_menu,
                           mql5_menu, termux_menu)
 from mql5_scout import (MQL5_LISTINGS, mql5_item_by_index, mql5_paged_message,
@@ -341,11 +341,37 @@ async def _run_action(action, user_id, store, message, intent_result, raw_text):
         await message.reply_text("Cancelled.")
         return True
     if action == "chat":
+        # Anything the intent LLM didn't classify as a search: a real
+        # question gets a real answer (the same /ask path — LLM when up,
+        # honest research hint when down); greetings/small talk keep the
+        # short capability blurb.
+        if _looks_like_question(raw_text):
+            await _ask(message, user_id, store, raw_text)
+            return True
         reply = _chat_reply(intent_result, raw_text)
         if reply:
             await message.reply_text(reply)
         return True
     return False
+
+
+_QUESTION_STARTERS = ("what", "how", "why", "when", "where", "who", "which",
+                      "can", "could", "would", "should", "is", "are", "do",
+                      "does", "did", "explain", "tell")
+
+
+def _looks_like_question(text):
+    """Cheap heuristic: a trailing '?' or a question-word opener. Used to
+    route an idle (intent-classified 'chat') message to the real answerer
+    instead of the canned blurb. Minda still owns the actual answer; this
+    only decides WHICH path an unclassified message takes."""
+    t = (text or "").strip()
+    if not t:
+        return False
+    if t.endswith("?"):
+        return True
+    first = t.split(None, 1)[0].lower().strip("!.,")
+    return first in _QUESTION_STARTERS
 
 
 async def _run_command(action, user_id, store, message, search_provider):
@@ -394,7 +420,15 @@ async def _run_command(action, user_id, store, message, search_provider):
             "🔬 AI research agent — which subject? Reply with it (e.g. "
             "\"machine learning\", \"forex trading\"). I'll gather open "
             "ebooks, scan GLOBAL sources (GitHub, GitLab, npm, crates.io, "
-            "Docker Hub) and synthesize a digest. (❌ Cancel to stop.)")
+            "Docker Hub) — 10+ outputs — and synthesize a how-to-apply "
+            "digest. (❌ Cancel to stop.)")
+        return
+    if action == "ask":
+        store.set_session(user_id, "ASK_TOPIC", {})
+        await message.reply_text(
+            "❓ Ask me anything. Reply with your question. I answer with "
+            "the team LLM when it's up (fail-open: a research hint "
+            "otherwise). (❌ Cancel to stop.)")
         return
     if action == "agent":
         try:
@@ -459,6 +493,30 @@ async def _run_find_all(message, user_id, store, search_provider,
                       reply_markup=find_all_keyboard(result, token))
 
 
+async def _ask(message, user_id, store, question):
+    """Answer an arbitrary question: one Minda Q&A pass (team LLM, fail-open
+    to a research hint + the live research flow). The question is recorded as
+    agent study so the bot learns what people ask."""
+    question = str(question)[:200]
+    await message.reply_text("🤔 Thinking…")
+    answer = await asyncio.to_thread(ask_question, question)
+    try:
+        gained, level = agent_skills().record_search("ask:" + question, 1,
+                                                     source="ask")
+    except Exception:
+        gained, level = 0, 1
+    if answer:
+        await _reply_long(message, "💬 " + answer
+                          + "\n\n🧠 +" + str(gained) + " XP → L" + str(level))
+    else:
+        await message.reply_text(
+            "I couldn't reach my answerer (team LLM) just now — so here is "
+            "the honest path: type `/research " + question[:60] + "` and I "
+            "will study the subject live and return a 10+ source report with "
+            "a how-to-apply digest. 🧠 +" + str(gained)
+            + " XP → L" + str(level))
+
+
 async def _run_research(message, user_id, store, search_provider, topic):
     """AI research agent for a subject: open ebooks + GLOBAL source scan
     (GitHub, GitLab, npm, crates.io, Docker Hub) + one LLM synthesis pass.
@@ -498,7 +556,7 @@ async def _run_research(message, user_id, store, search_provider, topic):
     except Exception:
         gained, level = 0, 1
     token = secrets.token_hex(6)
-    result = {"topic": topic, "ebooks": ebooks, "apps": gh_apps[:5],
+    result = {"topic": topic, "ebooks": ebooks, "apps": gh_apps,
               "info": ""}
     store.set_session(user_id, "FIND_RESULT",
                       {"result": result, "sources": sources,
@@ -906,8 +964,20 @@ async def handle_update(update, context, *, search_provider=None, store=None):
                 await callback.answer("")
                 await callback.message.reply_text(
                     "🔬 AI research agent — which subject? Reply with it "
-                    "(e.g. \"machine learning\", \"forex trading\"). (❌ Cancel "
-                    "to stop.)")
+                    "(e.g. \"machine learning\", \"forex trading\"). I'll "
+                    "return 10+ verified sources + a how-to-apply digest. "
+                    "(❌ Cancel to stop.)")
+                return
+        if data.startswith("ask:"):
+            if data == "ask:new":
+                store.set_session(user_id, "ASK_TOPIC", {})
+                await callback.answer("")
+                await callback.message.reply_text(
+                    "❓ Ask me anything. Reply with your question (e.g. "
+                    "\"how do I backtest a forex EA?\", \"what is RAG?\"). "
+                    "I answer with the team LLM when it's up; for a "
+                    "topic I'll also point you at the 10+ source "
+                    "research report. (❌ Cancel to stop.)")
                 return
         if data.startswith("termux:"):
             action = data[7:]
@@ -981,7 +1051,8 @@ async def handle_update(update, context, *, search_provider=None, store=None):
         if action is not None:
             if state in ("SELECTING_BOOK", "CHOOSE_DELIVERY",
                          "MQL5_LISTING", "AUTO_LISTING", "FIND_TOPIC",
-                         "FIND_RESULT", "FORGE_TOPIC", "RESEARCH_TOPIC"):
+                         "FIND_RESULT", "FORGE_TOPIC", "RESEARCH_TOPIC",
+                         "ASK_TOPIC"):
                 store.clear_session(user_id)
             await _run_command(action, user_id, store, message,
                                search_provider)
@@ -1061,6 +1132,20 @@ async def handle_update(update, context, *, search_provider=None, store=None):
                                      "e.g. \"machine learning\"")
             return
         await _run_research(message, user_id, store, search_provider, topic)
+        return
+
+    # Ask: a typed question answers the pending "Ask me anything" prompt.
+    # Kept verbatim (no filler-stripping) — a question is not a search topic.
+    if state == "ASK_TOPIC":
+        if text in ("/cancel", "cancel", "Cancel"):
+            store.clear_session(user_id)
+            await message.reply_text("Cancelled.")
+            return
+        if not text:
+            await message.reply_text("What would you like to ask?")
+            return
+        store.clear_session(user_id)
+        await _ask(message, user_id, store, text)
         return
 
     # mid-flow plain text starts a new action

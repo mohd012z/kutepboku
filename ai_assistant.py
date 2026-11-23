@@ -52,6 +52,14 @@ HELP_TEXT = (
     "send it) or Link (I send the direct download link).\n"
     "• ✨ Find ALL — one topic → open ebooks AND the best apps / source "
     "code (GitHub, by stars) together.\n"
+    "• 🔬 Research (/research) — one subject → 10+ verified sources across "
+    "GitHub, GitLab, npm, crates.io, Docker Hub + open ebooks, with a "
+    "HOW-TO-APPLY digest (how to start, how to grab each item). Tap an app "
+    "→ its source zip (link-only if >20 MB).\n"
+    "• ❓ Ask me anything (/ask) — type any question; I answer it with the "
+    "team LLM when it's up (fail-open to a research hint otherwise). For a "
+    "topic, I'll also suggest running it through Research for a full 10+ "
+    "source report.\n"
     "• 🪄 Prompt Forge — build a strong, evidence-first prompt for ANY AI "
     "(automation, research, developer, data science, photo, video…). Tap it, "
     "pick a capability, describe your task — I craft a ready-to-paste prompt "
@@ -87,6 +95,8 @@ HELP_TEXT = (
     "\nCommands:\n"
     "/start — main menu\n"
     "/find — Find ALL (ebooks + apps) for a topic\n"
+    "/research — AI research: 10+ sources (GitHub/GitLab/npm/crates/Docker) + how-to-apply\n"
+    "/ask — ask me anything (I answer, or research it live)\n"
     "/prompt — Prompt Forge (strong AI prompts for any capability)\n"
     "/marketing — AI advertising & marketing (ebooks + apps)\n"
     "/gemini — Jio AI Gemini Pro: generate the activation link + how it's made\n"
@@ -129,6 +139,7 @@ BOT_COMMANDS = [
     ("learn", "Learning skill + school programs (curricula + LMS)", "find:learn"),
     ("agent", "Built-in agent: skill level & what it has learned", "agent"),
     ("research", "AI research agent: ebooks + global sources + digest", "research"),
+    ("ask", "Ask me anything — I answer (or research it live)", "ask"),
     ("help", "Instructions & how to use", "help"),
     ("cancel", "Stop the current action", "cancel"),
     ("status", "Admin diagnostics (admin only)", "admin"),
@@ -219,8 +230,10 @@ def home_menu():
     rows = []
     rows.append([{"text": "✨ Find ALL (ebooks + apps)",
                   "callback_data": "fa:menu"}])
-    rows.append([{"text": "🔬 Research any subject (AI agent)",
+    rows.append([{"text": "🔬 Research any subject (AI agent, 10+ sources)",
                   "callback_data": "res:new"}])
+    rows.append([{"text": "❓ Ask me anything (I answer or research it)",
+                  "callback_data": "ask:new"}])
     left, right = [], []
     for index, (key, label, _topic) in enumerate(CATEGORIES):
         (left if index % 2 == 0 else right).append(
@@ -354,10 +367,62 @@ def delivery_nav_keyboard():
 
 def _chat_reply(intent_result, raw_text):
     if intent_result and intent_result["intent"] == "chat":
-        return ("I'm msasoup — I find open-licensed eBooks. Tell me a topic "
-                "(e.g. \"quantum computing\") or tap a category above. "
-                "Use ❓ How to use for details.")
+        return (
+            "I'm msasoup — an agent that studies every search. I can:\n"
+            "• Find open-licensed eBooks (IA, Gutenberg, Open Library) — "
+            "just name a topic.\n"
+            "• ✨ Find ALL — open ebooks AND the best apps/source code for a "
+            "topic.\n"
+            "• 🔬 Research a subject — 10+ verified sources (GitHub, GitLab, "
+            "npm, crates.io, Docker Hub) + a HOW-TO-APPLY digest.\n"
+            "• ❓ Answer questions — ask me anything (I use the team LLM "
+            "when it's up; otherwise I'll point you at the best tool).\n"
+            "Pick a button above, or type your question/topic.")
     return None
+
+
+_QUESTION_PROMPT = (
+    "You are msasoup, a practical Telegram research assistant. Answer the "
+    "user's question directly and usefully in plain text (no markdown "
+    "headings), max ~600 characters. You specialise in: finding open-"
+    "licensed ebooks (Internet Archive, Project Gutenberg, Open Library), "
+    "open-source apps and source code (GitHub, GitLab, npm, crates.io, "
+    "Docker Hub), and how to use them (concrete get-started steps). If the "
+    "answer needs a fact you are unsure of, say so in one line — never "
+    "invent URLs, versions, or numbers. If the user asks for books, apps, "
+    "or a survey of a topic, end with one short hint to run 'research: "
+    "<topic>' in the bot for a full 10+ source report.\n"
+    "USER: "
+)
+
+
+def ask_question(question, *, client=requests, base_url=None, api_key=None,
+                 model=None, timeout=60):
+    """One Minda Q&A pass for an arbitrary user question. Returns the answer
+    string, or None when the LLM is unavailable / malformed — the caller
+    then offers the research flow instead (the agent 'studies' it live)."""
+    base_url = base_url if base_url is not None else os.getenv("MINDA_BASE_URL")
+    api_key = api_key if api_key is not None else os.getenv("MINDA_API_KEY")
+    model = model if model is not None else os.getenv("MINDA_MODEL", "llm_model_fp8")
+    question = (question or "").strip()
+    if not base_url or not api_key or not question:
+        return None
+    try:
+        response = client.post(
+            base_url.rstrip("/") + "/chat/completions",
+            headers={"Authorization": "Bearer " + api_key,
+                     "Content-Type": "application/json"},
+            json={"model": model, "temperature": 0.4, "max_tokens": 500,
+                  "chat_template_kwargs": {"enable_thinking": False},
+                  "messages": [{"role": "user",
+                                "content": _QUESTION_PROMPT + question[:800]}]},
+            timeout=timeout)
+        response.raise_for_status()
+        raw = response.json()["choices"][0]["message"]["content"].strip()
+        raw = re.sub(r"^```(?:text|md)?\s*|\s*```$", "", raw, flags=re.S).strip()
+        return raw or None
+    except Exception:
+        return None
 
 
 def deliver_file(token, chat_id, book, *, session=requests):

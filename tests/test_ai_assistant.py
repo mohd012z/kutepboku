@@ -3,7 +3,8 @@ from unittest import mock
 from unittest.mock import MagicMock
 
 import ai_assistant
-from ai_assistant import (CATEGORIES, _parse_intent, ask_intent, category_topic,
+from ai_assistant import (CATEGORIES, _parse_intent, ask_intent,
+                          ask_question, category_topic,
                           deliver_file, delivery_keyboard, home_menu)
 
 
@@ -77,6 +78,40 @@ class AskIntentTests(unittest.TestCase):
         client.post = MagicMock(side_effect=Exception("boom"))
         self.assertIsNone(ask_intent("hi", client=client,
                                      base_url="http://x", api_key="k"))
+
+
+class AskQuestionTests(unittest.TestCase):
+    def _client(self, content):
+        client = MagicMock()
+        response = MagicMock()
+        response.raise_for_status = MagicMock()
+        response.json = MagicMock(return_value={
+            "choices": [{"message": {"content": content}}]})
+        client.post = MagicMock(return_value=response)
+        return client
+
+    def test_returns_answer(self):
+        client = self._client("RAG grounds answers in your data.")
+        out = ask_question("what is RAG?", client=client,
+                           base_url="http://x", api_key="k")
+        self.assertEqual(out, "RAG grounds answers in your data.")
+
+    def test_strips_code_fence(self):
+        client = self._client("```text\nuse Playwright.\n```")
+        out = ask_question("browser?", client=client,
+                           base_url="http://x", api_key="k")
+        self.assertEqual(out, "use Playwright.")
+
+    def test_missing_key_returns_none(self):
+        client = self._client("ok")
+        self.assertIsNone(ask_question("hi", client=client,
+                                       base_url="http://x", api_key=""))
+
+    def test_http_error_returns_none(self):
+        client = self._client("ok")
+        client.post = MagicMock(side_effect=Exception("boom"))
+        self.assertIsNone(ask_question("hi", client=client,
+                                       base_url="http://x", api_key="k"))
 
 
 class MenuTests(unittest.TestCase):

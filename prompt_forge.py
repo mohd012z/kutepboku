@@ -80,6 +80,18 @@ CAPABILITIES = [
      "with the sum of scenes.",
      "a shot-by-shot plan (scene, duration, shot, audio, on-screen text) "
      "plus the generation prompts"),
+    ("song", "🎵 Song (Suno AI)",
+     "a professional songwriter and AI music producer",
+     "paint the sound, not a name: genre + mood + era + instruments + a "
+     "vocal persona (no artist names or trademarks); describe the dynamic "
+     "journey (e.g. whisper-to-roar) instead of one flat genre; lyrics get "
+     "structure [metatags] and stress-correct syllables; proper nouns "
+     "phonetically respelled; spell out numbers; state BPM/key only when "
+     "the user wants them; never claim a generated song was made when it "
+     "was only prompted.",
+     "a Suno-ready package: Style field (up to ~1,000 chars), full lyrics "
+     "with [metatags] and structure, a title, what to put in Exclude "
+     "Styles, and 2 alternate style descriptions that differ in energy"),
     ("general", "🧩 General / Other",
      "an expert consultant in the user's stated field",
      "cite or show the basis for every material claim; mark FACT vs "

@@ -37,7 +37,8 @@ class ForgeCapabilityTests(unittest.TestCase):
     def test_all_requested_capabilities_present(self):
         keys = {k for k, *_ in CAPABILITIES}
         for want in ("automation", "research", "creator", "developer",
-                     "finding", "analysis", "data", "photo", "video"):
+                     "finding", "analysis", "data", "photo", "video",
+                     "song"):
             self.assertIn(want, keys)
         self.assertIn("general", keys)
 

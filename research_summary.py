@@ -18,10 +18,13 @@ _RESEARCH_PROMPT = (
     "Format, plain text (no markdown headings):\n"
     "OVERVIEW: 3-5 short bullets on what the topic is and where the field "
     "is now.\n"
+    "HOW TO APPLY: 2-4 concrete get-started steps a user can take with the "
+    "listed resources (which one to start with, how to grab it — the bot "
+    "sends the source zip for tappable items — and where the docs live).\n"
     "KEY RESOURCES: pick at most 5 from the list, each 'name — why it "
     "matters' (one line).\n"
     "NOTES: one line — a caveat, gap, or what is missing from this list.\n"
-    "Keep it under 900 characters total. If the list is empty, write "
+    "Keep it under 1100 characters total. If the list is empty, write "
     "OVERVIEW: No sources were found in the public registries just now.\n\n"
     "TOPIC: "
 )
@@ -79,13 +82,25 @@ def deterministic_digest(topic, apps, sources):
     lines.append("- Descriptions below are the registries' own; verify "
                  "before adopting.")
     lines.append("")
+    lines.append("HOW TO APPLY:")
+    start = top[0][1]
+    lines.append("- Start with: %s — tap its button in this message to get "
+                 "the source (zip, or link-only when >20 MB), then open "
+                 "the project page for its README/quickstart." % start)
+    lines.append("- Grab the code: each tappable item above sends its "
+                 "source zip (link-only when it exceeds Telegram's 20 MB "
+                 "bot limit) — clone it and run its quickstart/README.")
+    lines.append("- Then read the project docs for setup (most list a "
+                 "Getting Started section); pair with an open ebook from "
+                 "the same report for the theory side.")
+    lines.append("")
     lines.append("KEY RESOURCES:")
     for key, ident, desc, _c in top:
         lines.append("- %s [%s] — %s" % (ident, key, (desc or "no description")[:90]))
     lines.append("")
     lines.append("NOTES: Deterministic agent digest (no external AI service); "
                  "counts are registry popularity, not endorsements.")
-    return "\n".join(lines)[:1200]
+    return "\n".join(lines)[:1400]
 
 
 def research_summary(topic, apps, sources, *, client=requests, base_url=None,
