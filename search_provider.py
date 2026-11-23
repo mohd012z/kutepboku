@@ -1,4 +1,6 @@
-"""Verified search adapter: Google/Gemini discovery plus independent IA licensing."""
+"""Verified search adapter: key-free Internet Archive + web-wide open
+ebook sources (Gutenberg, Open Library), team-LLM relevance screening.
+The legacy Google/Gemini path is retained for tests/optional use."""
 import asyncio
 import re
 from urllib.parse import unquote, urlparse
@@ -11,6 +13,7 @@ from ebook_search_pipeline import (
     llm_relevance_indices,
     openlicensed_search,
 )
+import web_sources
 
 
 def archive_rights_checker(url, item, *, session=None):
@@ -54,20 +57,39 @@ def openlicensed_rights_checker(identifier, metadata):
 
 
 async def verified_search(query):
-    """Default search: key-free Internet Archive discovery + team-LLM
-    (OpenAI-compatible) relevance screening. No Google credentials required.
+    """Default search: key-free, web-wide discovery (Internet Archive +
+    Project Gutenberg + Open Library) with team-LLM (OpenAI-compatible)
+    relevance screening. No Google credentials required.
 
-    Runs off the event loop; unlicensed candidates are excluded before the LLM
-    ever sees them.
+    Licensing stays fail closed per source: IA candidates must carry an
+    explicit CC licenseurl; Gutenberg is public domain by definition;
+    Open Library candidates pass the same CC gate as IA. Runs off the
+    event loop; a failing source is skipped, the rest still deliver.
     """
 
     def _run():
-        return openlicensed_search(
+        candidates, seen = [], set()
+        ia = openlicensed_search(
             query,
             rights_checker=openlicensed_rights_checker,
-            relevance_checker=lambda topic, titles: llm_relevance_indices(topic, titles),
+            relevance_checker=None,  # screen the merged list in one LLM call
             max_results=15,
         )
+        for book in ia:
+            if book["source_url"] not in seen:
+                seen.add(book["source_url"])
+                candidates.append(book)
+        for book in web_sources.web_search(query, max_results=15):
+            if book["source_url"] not in seen:
+                seen.add(book["source_url"])
+                candidates.append(book)
+        if not candidates:
+            return []
+        indices = llm_relevance_indices(query, [b["title"] for b in candidates])
+        keep = (indices if indices is not None
+                else set(range(1, len(candidates) + 1)))
+        results = [b for i, b in enumerate(candidates, 1) if i in keep]
+        return results[:20]
 
     return await asyncio.to_thread(_run)
 
