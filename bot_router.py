@@ -20,11 +20,13 @@ from search_pagination import (build_search_keyboard, new_search_session,
 from ai_assistant import (BOT_COMMANDS, HELP_TEXT, _chat_reply, ask_intent,
                           ask_question, auto_menu, category_topic,
                           command_action, deliver_file, delivery_keyboard,
-                          delivery_nav_keyboard, find_menu, home_menu,
+                          delivery_nav_keyboard, ex4_menu, find_menu, home_menu,
                           mql5_menu, termux_menu)
 from mql5_scout import (MQL5_LISTINGS, mql5_item_by_index, mql5_paged_message,
                         scrape_trending)
 from mql5_scout import deliver_file as mql5_deliver_file
+from ex4_scout import (ex4_item_by_index, ex4_item_detail,
+                       ex4_fetch_listing, ex4_listing_message, ex4_study)
 from auto_scout import (_TOOL_LOOKUP, _default_branch, deliver_zip,
                         trending_repos)
 from find_all import (_TOPIC_LOOKUP, find_all, find_all_keyboard,
@@ -402,6 +404,10 @@ async def _run_command(action, user_id, store, message, search_provider):
         menu = mql5_menu()
         await message.reply_text(menu["text"], reply_markup=menu["reply_markup"])
         return
+    if action == "ex4_menu":
+        menu = ex4_menu()
+        await message.reply_text(menu["text"], reply_markup=menu["reply_markup"])
+        return
     if action == "auto_menu":
         menu = auto_menu()
         await message.reply_text(menu["text"], reply_markup=menu["reply_markup"])
@@ -773,6 +779,104 @@ async def handle_update(update, context, *, search_provider=None, store=None):
                     "✅ Sent " + item["title"][:80] + " (" + kind + ", "
                     + str(round(size / 1024)) + " KB)\n" + item["url"])
             return
+        if data.startswith(("ex4:", "ex4p:", "ex4i:")):
+            # EX4 decompiler channel (t.me/ex4tomq4decompilercom):
+            # ex4:menu | ex4:recent | ex4:full | ex4:study | ex4:back |
+            # ex4p:<page> (nav) | ex4i:<index> (item detail)
+            state, sdata = store.get_session(user_id)
+            if not isinstance(sdata, dict):
+                sdata = {}
+            if data == "ex4:menu":
+                menu = ex4_menu()
+                await callback.edit_message_text(
+                    menu["text"], reply_markup=menu["reply_markup"])
+                return
+            if data == "ex4:study":
+                await callback.answer("")
+                menu = ex4_study()
+                await callback.edit_message_text(
+                    menu["text"], reply_markup=menu["reply_markup"])
+                return
+            if data == "ex4:back":
+                if state != "EX4_LISTING" or not isinstance(
+                        sdata.get("items"), list):
+                    await callback.answer("No listing to go back to.",
+                                           show_alert=True)
+                    return
+                try:
+                    page = int(sdata.get("page", 0))
+                    msg = ex4_listing_message(sdata["items"], page,
+                                              sdata.get("mode", "full"))
+                except ValueError:
+                    await callback.answer("Bad page.", show_alert=True)
+                    return
+                await callback.answer("")
+                await callback.edit_message_text(
+                    msg["text"], reply_markup=msg["reply_markup"])
+                return
+            if data in ("ex4:recent", "ex4:full"):
+                mode = data[4:]
+                await callback.answer("📡 Loading EX4 decompiler…")
+                try:
+                    items = await asyncio.to_thread(ex4_fetch_listing, mode)
+                except Exception:
+                    await callback.edit_message_text(
+                        "⚠️ Couldn't load the EX4 decompiler channel right "
+                        "now (site busy or layout changed). Try again in a "
+                        "minute.")
+                    return
+                store.set_session(user_id, "EX4_LISTING",
+                                  {"mode": mode, "items": items, "page": 0})
+                msg = ex4_listing_message(items, 0, mode)
+                await callback.edit_message_text(
+                    msg["text"], reply_markup=msg["reply_markup"])
+                return
+            if data.startswith("ex4p:"):
+                if state != "EX4_LISTING" or not isinstance(
+                        sdata.get("items"), list):
+                    await callback.answer("This listing has expired.",
+                                           show_alert=True)
+                    return
+                try:
+                    page = int(data[5:])
+                    msg = ex4_listing_message(
+                        sdata["items"], page, sdata.get("mode", "full"))
+                except ValueError:
+                    await callback.answer("Bad page.", show_alert=True)
+                    return
+                sdata["page"] = page
+                store.set_session(user_id, state, sdata)
+                await callback.answer("")
+                await callback.edit_message_text(
+                    msg["text"], reply_markup=msg["reply_markup"])
+                return
+            if data.startswith("ex4i:"):
+                if state != "EX4_LISTING" or not isinstance(
+                        sdata.get("items"), list):
+                    await callback.answer("This listing has expired.",
+                                           show_alert=True)
+                    return
+                try:
+                    item = ex4_item_by_index(sdata["items"], data[5:])
+                except ValueError as err:
+                    await callback.answer(str(err), show_alert=True)
+                    return
+                await callback.answer("📄 Loading details…")
+                try:
+                    text, kb = await asyncio.to_thread(
+                        ex4_item_detail, item)
+                except Exception:
+                    await callback.edit_message_text(
+                        "📦 " + str(item.get("name", "EA"))[:90] + "\n\n"
+                        + (str(item.get("url", "")) or "no file post"),
+                        reply_markup={"inline_keyboard": [
+                            [{"text": "⬅️ Back to list",
+                              "callback_data": "ex4:back"},
+                             {"text": "🏠 Home",
+                              "callback_data": "ui:home"}]]})
+                    return
+                await callback.edit_message_text(text, reply_markup=kb)
+                return
         if data.startswith("auto:"):
             action = data[5:]
             if action == "menu":
