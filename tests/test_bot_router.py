@@ -357,6 +357,95 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         await handle_update(update, MagicMock(), store=self.store)
         update.callback_query.message.reply_text.assert_not_awaited()
 
+    # ---- EX4 decompiler channel callbacks --------------------------------
+    async def test_command_ex4_shows_menu(self):
+        update = self.message("/ex4")
+        await handle_update(update, MagicMock(), store=self.store)
+        text = update.message.reply_text.await_args.args[0]
+        self.assertIn("EX4 → MQ4", text)
+
+    async def test_ex4_menu_shows_listings(self):
+        update = self.callback("ex4:menu")
+        await handle_update(update, MagicMock(), store=self.store)
+        markup = update.callback_query.edit_message_text.await_args.kwargs["reply_markup"]
+        data = [btn["callback_data"] for row in markup["inline_keyboard"]
+                for btn in row]
+        self.assertIn("ex4:recent", data)
+        self.assertIn("ex4:ind", data)
+        self.assertIn("ex4:full", data)
+        self.assertIn("ex4:study", data)
+
+    async def test_ex4_study_shows_method(self):
+        update = self.callback("ex4:study")
+        await handle_update(update, MagicMock(), store=self.store)
+        text = update.callback_query.edit_message_text.await_args.args[0]
+        self.assertIn("build 600", text)
+        self.assertIn("memory dumps", text)
+
+    async def test_ex4_ind_listing_scrapes_and_pages(self):
+        items = [{"name": "Wolf Wave", "type": "MT4 INDICATOR", "recent": False,
+                  "filename": "Wolf Wave MT4.mq4", "size": "16.7 KB",
+                  "desc": "d", "url": "https://t.me/ex4tomq4decompilercom/232",
+                  "post": "232"}]
+        with patch("bot_router.ex4_fetch_listing", return_value=items) as fl:
+            update = self.callback("ex4:ind")
+            await handle_update(update, MagicMock(), store=self.store)
+        fl.assert_called_once_with("ind")
+        state, data = self.store.get_session(12345)
+        self.assertEqual(state, "EX4_LISTING")
+        self.assertEqual(data["mode"], "ind")
+        text = update.callback_query.edit_message_text.await_args.args[0]
+        self.assertIn("decompiled indicators", text)
+        self.assertIn("Wolf Wave", text)
+
+    async def test_ex4_listing_failure_shows_warning(self):
+        with patch("bot_router.ex4_fetch_listing", side_effect=ValueError("boom")):
+            update = self.callback("ex4:recent")
+            await handle_update(update, MagicMock(), store=self.store)
+        call = update.callback_query.edit_message_text.await_args
+        self.assertIn("Couldn't load", call.args[0])
+
+    async def test_ex4_page_navigation(self):
+        items = [{"name": "EA " + str(i), "type": "MT4 EXPERT ADVISOR",
+                  "recent": False, "filename": "", "size": "", "desc": "",
+                  "url": "https://t.me/x/" + str(i), "post": str(i)}
+                 for i in range(10)]
+        self.store.set_session(12345, "EX4_LISTING",
+                               {"mode": "recent", "items": items, "page": 0})
+        update = self.callback("ex4p:1")
+        await handle_update(update, MagicMock(), store=self.store)
+        self.assertEqual(self.store.get_session(12345)[1]["page"], 1)
+        update.callback_query.edit_message_text.assert_awaited()
+
+    async def test_ex4_item_detail_and_back(self):
+        items = [{"name": "Solar Wind", "type": "MT4 INDICATOR", "recent": False,
+                  "filename": "Solar Wind.ex4", "size": "52 KB",
+                  "desc": "trend histogram",
+                  "url": "https://t.me/ex4tomq4decompilercom/230", "post": "230"}]
+        self.store.set_session(12345, "EX4_LISTING",
+                               {"mode": "ind", "items": items, "page": 0})
+        update = self.callback("ex4i:0")
+        with patch("bot_router.ex4_item_detail",
+                   return_value=("🧬 Solar Wind\n📥 …", {"inline_keyboard": []})) as det:
+            await handle_update(update, MagicMock(), store=self.store)
+        det.assert_called_once()
+        self.assertIn("Solar Wind",
+                      update.callback_query.edit_message_text.await_args.args[0])
+        # back to the list works
+        update = self.callback("ex4:back")
+        await handle_update(update, MagicMock(), store=self.store)
+        text = update.callback_query.edit_message_text.await_args.args[0]
+        self.assertIn("decompiled indicators", text)
+
+    async def test_ex4_expired_listing_rejected(self):
+        self.store.set_session(12345, "MENU", {})
+        update = self.callback("ex4i:0")
+        await handle_update(update, MagicMock(), store=self.store)
+        update.callback_query.answer.assert_awaited()
+        # "expired" is answered as an alert, no message edit happens
+        self.assertIn("expired",
+                      update.callback_query.answer.await_args.args[0].lower())
+
     # ---- automation tools callbacks --------------------------------------
     async def test_auto_menu_shows_tools(self):
         update = self.callback("auto:menu")
@@ -567,7 +656,7 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
     def test_bot_command_markup_shape(self):
         from ai_assistant import bot_command_markup
         commands = bot_command_markup()
-        self.assertEqual(len(commands), 22)
+        self.assertEqual(len(commands), 23)
         self.assertEqual(commands[0].command, "start")
         names = [c.command for c in commands]
         self.assertIn("find", names)
@@ -580,6 +669,7 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("gemini", names)
         self.assertIn("research", names)
         self.assertIn("ask", names)
+        self.assertIn("ex4", names)
         for entry in commands:
             self.assertTrue(entry.description)
             self.assertLessEqual(len(entry.description), 256)

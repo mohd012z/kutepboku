@@ -111,6 +111,7 @@ HELP_TEXT = (
     "/forex — forex trading: info + tools + books\n"
     "/android — android automation books\n"
     "/mql5 — trending EAs & indicators (MQL5)\n"
+    "/ex4 — decompiled MT4 EAs (EX4→MQ4 channel)\n"
     "/tools — automation tools (hacking + Android)\n"
     "/help — this help\n"
     "/cancel — stop current action\n"
@@ -126,6 +127,7 @@ BOT_COMMANDS = [
     ("termux", "Termux menu — install + chat automation + related", "termux_menu"),
     ("android", "Android automation books", "search:android automation"),
     ("mql5", "Trending EAs & indicators (MQL5)", "mql5_menu"),
+    ("ex4", "Decompiled MT4 EAs (EX4→MQ4 channel)", "ex4_menu"),
     ("tools", "Automation tools (hacking + Android)", "auto_menu"),
     ("find", "Find ALL ebooks + apps for a topic", "find_menu"),
     ("prompt", "Prompt Forge — strong AI prompts for any capability",
@@ -244,6 +246,7 @@ def home_menu():
     if left or right:
         rows.append(left + right)
     rows.append([{"text": "🏷️ MQL5 EAs/Indicators", "callback_data": "mql5:menu"}])
+    rows.append([{"text": "🧬 EX4 Decompiled MT4 EAs", "callback_data": "ex4:menu"}])
     rows.append([{"text": "🛠️ Automation Tools", "callback_data": "auto:menu"}])
     rows.append([
         {"text": "📣 AI Marketing", "callback_data": "fa:run:marketing"},
@@ -294,6 +297,11 @@ def mql5_menu():
             for key, label, _market, _kind in MQL5_LISTINGS]
     rows.append([{"text": "🏠 Home", "callback_data": "ui:home"}])
     return {"text": MQL5_TEXT, "reply_markup": {"inline_keyboard": rows}}
+
+
+def ex4_menu():
+    from ex4_scout import ex4_menu as _ex4_menu
+    return _ex4_menu()
 
 
 def auto_menu():
