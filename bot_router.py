@@ -781,8 +781,8 @@ async def handle_update(update, context, *, search_provider=None, store=None):
             return
         if data.startswith(("ex4:", "ex4p:", "ex4i:")):
             # EX4 decompiler channel (t.me/ex4tomq4decompilercom):
-            # ex4:menu | ex4:recent | ex4:full | ex4:study | ex4:back |
-            # ex4p:<page> (nav) | ex4i:<index> (item detail)
+            # ex4:menu | ex4:recent | ex4:ind | ex4:full | ex4:study
+            # ex4:back | ex4p:<page> (nav) | ex4i:<index> (item detail)
             state, sdata = store.get_session(user_id)
             if not isinstance(sdata, dict):
                 sdata = {}
@@ -814,7 +814,7 @@ async def handle_update(update, context, *, search_provider=None, store=None):
                 await callback.edit_message_text(
                     msg["text"], reply_markup=msg["reply_markup"])
                 return
-            if data in ("ex4:recent", "ex4:full"):
+            if data in ("ex4:recent", "ex4:full", "ex4:ind"):
                 mode = data[4:]
                 await callback.answer("📡 Loading EX4 decompiler…")
                 try:
@@ -1154,7 +1154,8 @@ async def handle_update(update, context, *, search_provider=None, store=None):
         action = command_action(name)
         if action is not None:
             if state in ("SELECTING_BOOK", "CHOOSE_DELIVERY",
-                         "MQL5_LISTING", "AUTO_LISTING", "FIND_TOPIC",
+                         "MQL5_LISTING", "EX4_LISTING", "AUTO_LISTING",
+                         "FIND_TOPIC",
                          "FIND_RESULT", "FORGE_TOPIC", "RESEARCH_TOPIC",
                          "ASK_TOPIC"):
                 store.clear_session(user_id)

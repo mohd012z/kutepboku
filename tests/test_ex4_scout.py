@@ -141,6 +141,33 @@ class FetchListingTests(unittest.TestCase):
         # at minimum catalogue names present (channel empty is OK)
         self.assertTrue(items)
 
+    def test_ind_returns_curated_indicators_newest_first(self):
+        # channel down is non-fatal for the pinned indicator list
+        items = ex4_fetch_listing("ind", client=_client(""))
+        self.assertEqual(len(items), len(ex4_scout.INDICATORS))
+        self.assertTrue(all(it["type"] == "MT4 INDICATOR" for it in items))
+        posts = [int(it["post"]) for it in items]
+        self.assertEqual(posts, sorted(posts, reverse=True))
+        by_post = {it["post"]: it for it in items}
+        # Wolf Wave is the .mq4 source drop
+        ww = by_post["232"]
+        self.assertEqual(ww["filename"], "Wolf Wave MT4.mq4")
+        self.assertEqual(ww["url"], "https://t.me/ex4tomq4decompilercom/232")
+        # every indicator carries a mechanism note, not just marketing
+        self.assertTrue(all(it["desc"] for it in items))
+
+    def test_ind_enriched_when_recent_preview_has_it(self):
+        # Multi Sniper (post 465) is in the /s/ preview -> recent flag + size
+        html = '<div data-post="ex4tomq4decompilercom/465">\n' \
+               '  <div class="tgme_widget_message_document_title accent_color" dir="auto">Multi Sniper mq.ex4</div>\n' \
+               '  <div class="tgme_widget_message_document_extra" dir="auto">91.5 KB</div>\n' \
+               '</div>'
+        items = ex4_fetch_listing("ind", client=_client(html))
+        ms = [it for it in items if it["post"] == "465"][0]
+        self.assertTrue(ms["recent"])
+        self.assertEqual(ms["size"], "91.5 KB")
+        self.assertEqual(ms["filename"], "Multi Sniper mq.ex4")
+
 
 class PagingTests(unittest.TestCase):
     ITEMS = [{"name": "EA %d" % i, "type": "MT4 EXPERT ADVISOR",
@@ -189,7 +216,7 @@ class MenuTests(unittest.TestCase):
 
 
 class ItemDetailTests(unittest.TestCase):
-    def test_detail_recent_fetches_long_desc(self):
+    def test_detail_fetches_paired_desc(self):
         client = _client("")
         item = {"name": "Dual Striker PRO MT4", "type": "MT4 EXPERT ADVISOR",
                 "recent": True, "filename": "Dual Striker PRO MT4.ex4",
@@ -197,12 +224,13 @@ class ItemDetailTests(unittest.TestCase):
                 "desc": "Dual Striker PRO MT4 \U0001F4B0 Decompiled",
                 "url": "https://t.me/ex4tomq4decompilercom/457",
                 "post": "457"}
-        # _fetch_desc is called with post-1 (456)
+        # detail scans the +/-2 window around the file post (457)
         with mock.patch.object(ex4_scout, "_fetch_desc",
                                return_value="Dual Striker uses a momentum-based "
                                             "strategy for trading Gold. No grid.") as fd:
             text, kb = ex4_item_detail(item, client=client)
-        self.assertEqual(fd.call_args.args[0], 456)
+        self.assertEqual([c.args[0] for c in fd.call_args_list],
+                         [456, 458, 455, 459])
         self.assertIn("Dual Striker uses a momentum-based strategy", text)
         self.assertIn("59.5 KB", text)
         self.assertIn("\U0001F4E5 Get it on Telegram", str(kb))
@@ -210,15 +238,20 @@ class ItemDetailTests(unittest.TestCase):
         btns = kb["inline_keyboard"][0][0]
         self.assertEqual(btns["url"], "https://t.me/ex4tomq4decompilercom/457")
 
-    def test_detail_catalogue_item_no_desc_fetch(self):
+    def test_detail_neighbour_desc_rejected_by_name_guard(self):
+        # the neighbour's description mentions a DIFFERENT product: it must
+        # not be adopted even though it is longer
         item = {"name": "Flexible EA", "type": "MT4 EXPERT ADVISOR",
                 "recent": False, "filename": "", "size": "",
                 "desc": "Flexible EA loads your custom indicators to trigger signals.",
                 "url": "https://t.me/ex4tomq4decompilercom/469", "post": "469"}
-        with mock.patch.object(ex4_scout, "_fetch_desc") as fd:
+        with mock.patch.object(ex4_scout, "_fetch_desc",
+                               return_value="Solo Sniper Pro is a scalping robot "
+                                            "with compound risk management and a "
+                                            "high win rate on M15."):
             text, kb = ex4_item_detail(item, client=_client(""))
-        fd.assert_not_called()  # not recent -> no paired-post fetch
         self.assertIn("Flexible EA loads your custom indicators", text)
+        self.assertNotIn("Solo Sniper Pro", text)
 
     def test_detail_long_desc_truncated(self):
         item = {"name": "X", "type": "MT4 EXPERT ADVISOR", "recent": True,

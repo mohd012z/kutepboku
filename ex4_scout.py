@@ -34,6 +34,55 @@ MAX_DESC = 320
 _TAG = re.compile(r"<[^>]+>")
 _SPLIT = re.compile(r'data-post="' + re.escape(CHANNEL) + r'/(\d+)"')
 
+# --- curated indicators (verified file posts, full-history scrape 2026-11-25) --
+# The channel is a daily feed; only the ~20 latest posts are in the /s/ preview,
+# so older indicator drops are pinned by post number. Every (name, post,
+# filename, size) was verified against the full 2023-2026 scrape of the
+# channel before being listed. Descriptions are mechanism writeups, not the
+# sellers' marketing.
+# (name, file_post, filename, size, mechanism_note)
+INDICATORS = [
+    ("Wolf Wave", 232, "Wolf Wave MT4.mq4", "16.7 KB",
+     "ZigZag-based wedge pattern (down-tilt to buy, up-tilt to sell). The "
+     "only file in this channel shipped as decompiled .mq4 source rather "
+     "than just the compiled .ex4 — open it straight in MetaEditor."),
+    ("TTM Scalper (with subswings)", 246, "ttm-scalper-with-subswings-mt4.ex4",
+     "72 KB",
+     "Reversal-pattern swing signals for M1-H4; spots price flips and "
+     "converts them into swing entries; multi-timeframe by design."),
+    ("Solar Wind", 230, "Solar Wind.ex4", "52 KB",
+     "Trend-following histogram: direction + strength, for entry/exit "
+     "timing or as a confirmation layer on other strategies."),
+    ("Band Moving Average (BMA)", 239, "BMA Trend mt4.ex4", "60.8 KB",
+     "Custom 3-line MA: a central SMA/EMA/SMMA/WMA with upper/lower lines "
+     "shifted +/-2% acting as support/resistance bands."),
+    ("DDFX Fast Trend v3", 243, "DDFX Fast Trend v3 mt4.ex4", "50.4 KB",
+     "Trend filter around a 'golden line': buy setups only above it, sell "
+     "setups only below it."),
+    ("Trend Direction & Force Index", 210,
+     "Trend direction & force index full.ex4", "58.3 KB",
+     "Tracks price change plus the relative force behind it; recommended "
+     "as a filter alongside price action."),
+    ("SAMURAI v3", 222, "Samuray_v3.ex4", "72.5 KB",
+     "Multi-indicator trend composite (MA/RSI/Bollinger/MACD family)."),
+    ("ADXR", 227, "ADXR.ex4", "50.6 KB",
+     "Smoothed ADX — a trend-strength rating rather than a direction call."),
+    ("Binary MoneyArrow", 237, "Binary MoneyArrow mt4.ex4", "52.5 KB",
+     "Buy/sell arrow signals for binary options from a trend + oscillator "
+     "+ S/R combination."),
+    ("GoldRush Trend Arrow Signal", 374, "GoldRush Trend Arrow Signal.ex4",
+     "77.8 KB",
+     "Trend arrow signals for XAUUSD."),
+    ("Trend SniperX MT4", 389, "Trend SniperX MT4.ex4", "183.6 KB",
+     "Trend-following sniper entries (large file — extra strategy logic)."),
+    ("Multi Sniper", 465, "Multi Sniper mq.ex4", "91.5 KB",
+     "Multi-symbol scalping entries; no-grid/no-martingale per the "
+     "channel's post (seller's claim, unverified)."),
+    ("Solo Sniper Pro", 471, "Solo Sniper Pro mw.ex4", "65 KB",
+     "M15 scalping with compound risk management per the channel's post "
+     "(seller's claim, unverified)."),
+]
+
 _desc_cache = {}  # post_no -> (text, fetched_at); recent items only
 _CACHE_TTL = 900
 
@@ -209,13 +258,46 @@ def _merge(names, cards, posts):
     return items
 
 
+def _indicator_item(name, post_no, filename, size, note, posts):
+    """One curated indicator, enriched when it is in the recent preview."""
+    recent = None
+    for info in (posts or {}).values():
+        if info.get("filename") and info.get("post") == post_no:
+            recent = info
+            break
+    desc = note
+    if recent and recent.get("desc") and len(recent["desc"]) > len(note):
+        desc = recent["desc"]
+    return {
+        "name": name,
+        "type": "MT4 INDICATOR",
+        "recent": bool(recent),
+        "filename": (recent or {}).get("filename", filename),
+        "size": (recent or {}).get("size") or size,
+        "desc": desc,
+        "url": TG_BASE + "/" + str(post_no),
+        "post": str(post_no),
+    }
+
+
 def ex4_fetch_listing(mode, client=requests):
     """mode 'recent' -> latest channel posts (filename + size guaranteed);
+    mode 'ind' -> the curated indicator list (verified file posts, newest
+    first; works even when those posts have left the /s/ preview);
     mode 'full' -> the complete site catalogue merged with recent posts.
-    Returns a list of items (see _item). Raises when the primary source for
-    the mode is unavailable (recent=channel, full=catalogue). The *other*
-    source degrading is non-fatal: full works with an empty recent set and
-    recent works with only the live doc posts."""
+    Returns a list of items (see _item / _indicator_item). Raises when the
+    primary source for the mode is unavailable (recent=channel,
+    full=catalogue). The *other* source degrading is non-fatal: full works
+    with an empty recent set and recent works with only the live doc posts.
+    """
+    if mode == "ind":
+        try:
+            posts = scrape_channel(client)
+        except Exception:
+            posts = {}  # enrichment is optional; the list is pinned
+        return [_indicator_item(name, post_no, filename, size, note, posts)
+                for name, post_no, filename, size, note in
+                sorted(INDICATORS, key=lambda t: -t[1])]
     posts = {}
     if mode == "recent":
         posts = scrape_channel(client)
@@ -240,31 +322,43 @@ def ex4_fetch_listing(mode, client=requests):
 # --- descriptions (detail view) ----------------------------------------------
 
 def _fetch_desc(post_no, client=requests):
-    """Long description from the paired post-1 (image + text)."""
+    """Full caption text of one post, keyless, for the WHOLE channel history.
+
+    The single-post page (t.me/<channel>/<post>) is server-rendered and its
+    og:description carries the complete post text (verified: 895-char
+    descriptions returned intact). The /s/ preview by contrast only holds
+    the ~20 latest posts and its document pages omit the text markup, so
+    this is the reliable path for older posts. Returns "" when the post has
+    no text body (e.g. a pure file post's caption).
+    """
     now = time.time()
     hit = _desc_cache.get(post_no)
     if hit and now - hit[1] < _CACHE_TTL:
         return hit[0]
-    html = _fetch(S + str(post_no), client)
-    parts = _SPLIT.split(html)
-    text = ""
-    for i in range(1, len(parts) - 1, 2):
-        if parts[i] == str(post_no):
-            for t in re.findall(
-                    r'class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>',
-                    parts[i + 1], re.S):
-                cleaned = _strip(t)
-                if len(cleaned) > len(text):
-                    text = cleaned
-            break
+    html = _fetch(TG_BASE + "/" + str(post_no), client)
+    m = re.search(r'property="og:description" content="([^"]*)"', html or "")
+    text = _strip(m.group(1)) if m else ""
     _desc_cache[post_no] = (text, now)
     return text
 
 
+def _name_ok(name, text):
+    """Guard against grabbing the *neighbouring* item's description: the
+    paired text post must mention the item's own name. Token match (not
+    substring — "trade" must not match "trader"): at least half of the
+    name's significant tokens (len>=3) must appear as tokens in the text."""
+    tokens = re.compile(r"[a-z0-9]+")
+    nt = {w for w in tokens.findall((name or "").lower()) if len(w) >= 3}
+    if not nt:
+        return True
+    tt = set(tokens.findall((text or "").lower()))
+    return len(nt & tt) * 2 >= len(nt)
+
+
 def ex4_item_detail(item, client=requests):
-    """(text, keyboard) for one EA. Downloads the long description from the
-    paired post-1 on first tap (15-min cache); falls back to the catalogue
-    blurb when the fetch fails or there is no post to read."""
+    """(text, keyboard) for one EA/indicator. Downloads the long description
+    from the paired post-1 on first tap (15-min cache); falls back to the
+    mechanism note / catalogue blurb when the fetch fails or is shorter."""
     lines = ["🧬 " + str(item.get("name", "EA"))[:90]]
     if item.get("recent"):
         lines.append("✅ decompiled + just posted to the channel")
@@ -274,24 +368,40 @@ def ex4_item_detail(item, client=requests):
                      + ("  ·  " + str(item["size"]) if item.get("size") else ""))
     desc = str(item.get("desc", "")).strip()
     post = int(item.get("post") or 0)
-    if item.get("recent") and post > 1 and len(desc) <= MAX_DESC:
-        try:
-            got = _fetch_desc(post - 1, client=client)
-            if len(got) > len(desc):
-                desc = got
-        except Exception:
-            pass  # catalogue blurb (or nothing) is the fallback
+    # Long description from the paired text post, for ANY item with a post to
+    # read. The channel usually posts description BEFORE the file (post-1);
+    # a few drops have it after (post+1/+2, e.g. Wolf Wave at +2). Scan the
+    # +/-2 window, keep the longest post that passes the name guard (so the
+    # neighbouring item's description is never picked up). Only upgrades to
+    # the seller's full text when it is longer than what we already carry.
+    if post > 1:
+        best = ""
+        for off in (-1, 1, -2, 2):
+            try:
+                got = _fetch_desc(post + off, client=client)
+            except Exception:
+                continue
+            if len(got) > len(best) and _name_ok(item.get("name"), got):
+                best = got
+        if len(best) > len(desc):
+            desc = best
     if desc:
         d = re.sub(r"\s+", " ", desc).strip()
         if len(d) > MAX_DESC:
             d = d[:MAX_DESC].rstrip() + "…"
         lines.append("\n📝 " + d)
     if item.get("url"):
+        if "INDICATOR" in str(item.get("type", "")).upper():
+            dest = "MQL4/Indicators"
+            extra = (" then recompile it to read the source (most ship as "
+                     ".ex4; Wolf Wave ships as .mq4).")
+        else:
+            dest = "MQL4/Experts"
+            extra = " and recompile the decompiled .mq4 to read the source."
         lines.append(
             "\n📥 The .ex4 is a Telegram channel document (tg:// protocol — "
             "no public CDN). Open the post below to save it, then drop it in "
-            "MQL4/Experts of MT4 and recompile the decompiled .mq4 to read "
-            "the source.")
+            + dest + " of MT4" + extra)
     keyboard = {"inline_keyboard": [
         [{"text": "📥 Get it on Telegram", "url": str(item["url"])}],
         [{"text": "⬅️ Back to list", "callback_data": "ex4:back"},
@@ -312,10 +422,12 @@ def ex4_listing_message(items, page, mode):
         + ("  ⚡" + str(it["size"]) if it.get("size") else "")
         + ("  (recent)" if it.get("recent") else "")
         for i, it in enumerate(items[start:start + PER_PAGE]))
+    heading = {"recent": "recent decompiled EAs",
+               "ind": "decompiled indicators",
+               "full": "full EA catalogue"}
     return {
         "text": ("📦 EX4 decompiler — "
-                 + ("recent decompiled EAs" if mode == "recent" else
-                    "full catalogue")
+                 + heading.get(mode, "full EA catalogue")
                  + " (page " + str(page + 1) + "/" + str(_pages(len(items)))
                  + ")\n\n" + titles
                  + "\n\nTap a title for details + the file post:")
@@ -356,6 +468,8 @@ def ex4_menu():
     rows = [
         [{"text": "🆕 Recent decompiled EAs (10 latest)",
           "callback_data": "ex4:recent"}],
+        [{"text": "📊 Decompiled indicators (" + str(len(INDICATORS)) + ")",
+          "callback_data": "ex4:ind"}],
         [{"text": "📚 Full catalogue (83 EAs)", "callback_data": "ex4:full"}],
         [{"text": "🧪 How the decompiler works (method study)",
           "callback_data": "ex4:study"}],
@@ -372,34 +486,45 @@ def ex4_study():
 
 EX4_TEXT = (
     "🧬 EX4 → MQ4 decompiler channel (t.me/ex4tomq4decompilercom)\n"
-    "Daily decompiled MT4 Expert Advisors from ex4tomq4decompiler.com. Each "
-    "EA ships as a .ex4 file + a decompiled .mq4. Tap an EA for the full "
-    "details + a one-tap link to the Telegram file post (that is how you save "
-    "the .ex4 — the bytes go through Telegram's document protocol, no public "
-    "CDN). Browse recent drops or the full 83-EA catalogue."
+    "Daily decompiled MT4 Expert Advisors AND indicators from "
+    "ex4tomq4decompiler.com — 145 files since 2023 (full history scraped).\n"
+    "Browse: recent drops · a curated list of the decompiled indicators "
+    "(Wolf Wave, TTM Scalper, Solar Wind, BMA, DDFX…) · the 83-EA site "
+    "catalogue · how the decompilation works.\n"
+    "Tap an item for full details + a one-tap link to the exact Telegram "
+    "file post (that is how you save the .ex4 — no public CDN; the msasoup "
+    "bot is not a channel member)."
 )
 
 EX4_STUDY_TEXT = (
     "🧪 Method study — how EX4 → MQ4 decompilation works\n\n"
-    "• What a .ex4 is: MT4 Expert Advisors/indicators are compiled to .ex4 "
-    "(bytecode + resources). The channel's service (ex4tomq4decompiler.com) "
-    "disassembles that back to readable .mq4 — the 'EX4 TO MQ4 Decompiler'.\n\n"
-    "• The decompiler family: MT4 .ex4 decompilation (the channel's niche) is "
-    "a paid niche — tools like Ex4 to Mq4 (builds 224/225/226) run ~$12–800. "
-    "MT5's .ex5 is significantly harder (different bytecode), which is why "
-    "this channel focuses on MT4.\n\n"
-    "• Quality caveat: decompiled .mq4 usually has mangled local names and "
-    "sometimes inlined/obfuscated logic; recompile it in MetaEditor to read "
-    "and tweak it. '90% win rate' style marketing claims in the posts are the "
-    "seller's, not a verified stat.\n\n"
-    "• Why the file needs Telegram: the .ex4 is delivered as a Telegram "
-    "channel document (tg:// file protocol). There is no public HTTP/CDN "
-    "link and the msasoup bot is not a channel member, so the bot hands you "
-    "the deep link + full details rather than the raw bytes.\n\n"
-    "• The catalogue: the companion site /free-mt4-robots lists all 83 EAs "
-    "(JSON-LD + product cards) each mapped to its channel post — that is the "
-    "source for 'full catalogue'.\n\n"
-    "• License note: these are decompiled copies of third-party EAs, free via "
-    "the channel for personal research — not open-source; respect the "
-    "original author when redistributing."
+    "• What a .ex4 is: MT4 Expert Advisors/indicators/scripts compiled to a "
+    "Windows PE (DLL-style) binary. Before MT4 build 600 (Feb 2014) the "
+    "compiler left enough structure that the classic standalone decompiler "
+    "(ex4tomq4 v4.0.427.4) could fully restore .mq4 in seconds. From build "
+    "600 on, MetaQuotes compile to native code with optimization + "
+    "obfuscation — automatic decompilation became impossible.\n\n"
+    "• So it's done now: manual RE — disassembly of the native code, "
+    "memory dumps of the running terminal, a real-time debugger, and "
+    "overcoming MQL runtime virtualization. That is why services price per "
+    "file/complexity (the channel's companion site, ex4tomq4decompiler.com, "
+    "sells 'EX4 TO MQ4 DECOMPILER 2027 Pro' + a paid decompilation service; "
+    "the free catalogue = what they decompile and drop on the channel). "
+    "MT5 .ex5 is harder still (different runtime), hence the MT4 focus.\n\n"
+    "• What you can recover: string table, metadata, function skeletons, "
+    "and — after a paid decompilation — the decompiled .mq4 logic. Names "
+    "are usually mangled; recompile in MetaEditor to read/tweak. Static "
+    "extraction only tells you what's observable; signal logic inside "
+    "protected builds is not readable without the decompilation itself.\n\n"
+    "• Why the file needs Telegram: the .ex4/.mq4 are channel documents "
+    "(tg:// file protocol). There is NO public HTTP/CDN link and the msasoup "
+    "bot is not a channel member (Bot API getChatMessage → not found), so "
+    "the bot gives you the exact post deep link — tap 'Get it on Telegram', "
+    "save the file, done. To automate byte-delivery, add the msasoup bot "
+    "(or any member bot) as a channel admin with post rights.\n\n"
+    "• Quality caveat: '90% win rate / no martingale' claims are the "
+    "seller's marketing, not verified stats — backtest in the MT4 strategy "
+    "tester before trusting any of them.\n\n"
+    "• License note: decompiled copies of third-party products, free for "
+    "personal research via the channel — not open-source."
 )
