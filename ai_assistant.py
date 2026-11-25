@@ -128,6 +128,7 @@ BOT_COMMANDS = [
     ("android", "Android automation books", "search:android automation"),
     ("mql5", "Trending EAs & indicators (MQL5)", "mql5_menu"),
     ("ex4", "Decompiled MT4 EAs (EX4→MQ4 channel)", "ex4_menu"),
+    ("suno", "Suno AI song downloader (public links → audio)", "suno_menu"),
     ("tools", "Automation tools (hacking + Android)", "auto_menu"),
     ("find", "Find ALL ebooks + apps for a topic", "find_menu"),
     ("prompt", "Prompt Forge — strong AI prompts for any capability",
@@ -247,6 +248,7 @@ def home_menu():
         rows.append(left + right)
     rows.append([{"text": "🏷️ MQL5 EAs/Indicators", "callback_data": "mql5:menu"}])
     rows.append([{"text": "🧬 EX4 Decompiled MT4 EAs", "callback_data": "ex4:menu"}])
+    rows.append([{"text": "🎵 Suno AI Song Downloader", "callback_data": "snu:menu"}])
     rows.append([{"text": "🛠️ Automation Tools", "callback_data": "auto:menu"}])
     rows.append([
         {"text": "📣 AI Marketing", "callback_data": "fa:run:marketing"},
@@ -297,6 +299,11 @@ def mql5_menu():
             for key, label, _market, _kind in MQL5_LISTINGS]
     rows.append([{"text": "🏠 Home", "callback_data": "ui:home"}])
     return {"text": MQL5_TEXT, "reply_markup": {"inline_keyboard": rows}}
+
+
+def suno_menu():
+    from suno_scout import suno_menu as _suno_menu
+    return _suno_menu()
 
 
 def ex4_menu():

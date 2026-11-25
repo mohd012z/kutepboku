@@ -21,7 +21,7 @@ from ai_assistant import (BOT_COMMANDS, HELP_TEXT, _chat_reply, ask_intent,
                           ask_question, auto_menu, category_topic,
                           command_action, deliver_file, delivery_keyboard,
                           delivery_nav_keyboard, ex4_menu, find_menu, home_menu,
-                          mql5_menu, termux_menu)
+                          mql5_menu, suno_menu, termux_menu)
 from mql5_scout import (MQL5_LISTINGS, mql5_item_by_index, mql5_paged_message,
                         scrape_trending)
 from mql5_scout import deliver_file as mql5_deliver_file
@@ -37,6 +37,9 @@ from agent_skills import agent_skills
 from prompt_forge import forge_menu, forge_prompt, prompt_text
 from gemini_jio import (gemini_menu, generate_activation_link,
                         gemini_result_text, how_it_works_text)
+from suno_scout import (deliver_song, extract_suno_link, fetch_song_info,
+                        link_only_card, looks_like_suno_link,
+                        song_card, suno_study)
 
 # callback key ("mt5:ea") -> (market, kind)
 _MQL5_LOOKUP = {key: (market, kind) for key, _label, market, kind in MQL5_LISTINGS}
@@ -408,6 +411,10 @@ async def _run_command(action, user_id, store, message, search_provider):
         menu = ex4_menu()
         await message.reply_text(menu["text"], reply_markup=menu["reply_markup"])
         return
+    if action == "suno_menu":
+        menu = suno_menu()
+        await message.reply_text(menu["text"], reply_markup=menu["reply_markup"])
+        return
     if action == "auto_menu":
         menu = auto_menu()
         await message.reply_text(menu["text"], reply_markup=menu["reply_markup"])
@@ -623,6 +630,111 @@ async def _send_repo_zip(update, user_id, store, item):
     if message is not None:
         await message.reply_text("✅ Sent " + item["id"] + " ("
                                  + str(round(size / 1024)) + " KB)\n" + item["url"])
+
+
+async def _suno_load_info(update, store, user_id, callback, fmt=None, *,
+                          reply=None):
+    """Fetch Suno metadata for the pending SONG_LINK (or the one in `reply`).
+
+    Stores the result under SONG_LINK and renders the song card. `fmt`, when
+    given, immediately starts the download. Returns True once handled.
+    """
+    state, sdata = store.get_session(user_id)
+    pending = sdata.get("url") if state == "SONG_LINK" and isinstance(sdata, dict) else None
+    target = (reply or pending or "").strip()
+    link = extract_suno_link(target)
+    if not link:
+        if reply is not None:
+            store.set_session(user_id, "SONG_LINK", {})
+            card = {"text": "🎵 Send me a *public* Suno link — "
+                            "suno.com/s/… (share) or suno.com/song/… (song). "
+                            "Private songs need a login, so send the shared "
+                            "one. (❌ Cancel to stop.)",
+                    "reply_markup": None}
+            if callback is not None:
+                await callback.answer("")
+                await callback.edit_message_text(card["text"])
+            else:
+                await update.message.reply_text(card["text"])
+            return True
+        if callback is not None:
+            await callback.answer("No Suno link found in that.", show_alert=True)
+        return True
+    if callback is not None:
+        await callback.answer("🎵 Reading the song from Suno…")
+    info = await asyncio.to_thread(fetch_song_info, link, session=requests)
+    store.set_session(user_id, "SONG_LINK", {"info": info, "url": link})
+    card = song_card(info)
+    if callback is not None:
+        await callback.edit_message_text(card["text"], reply_markup=card["reply_markup"],
+                                         disable_web_page_preview=False)
+    else:
+        await update.message.reply_text(card["text"],
+                                        reply_markup=card["reply_markup"])
+    if fmt:
+        await _suno_download(update, user_id, store, callback, info, fmt)
+    return True
+
+
+async def _suno_download(update, user_id, store, callback, info, fmt):
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    chat_id = str(os.getenv("TELEGRAM_DELIVERY_CHAT_ID") or user_id)
+    message = update.message
+    try:
+        status = await asyncio.to_thread(
+            deliver_song, token, chat_id, info, fmt, session=requests)
+    except Exception as err:
+        fallback = link_only_card(info)
+        if callback is not None:
+            await callback.answer("⚠️ Decrypt unavailable", show_alert=True)
+            try:
+                await callback.edit_message_text(fallback["text"],
+                                                 reply_markup=fallback["reply_markup"])
+            except Exception:
+                pass
+        if message is not None:
+            await message.reply_text("⚠️ Couldn't fetch the playable file: "
+                                     + str(err)[:200])
+        return
+    size_mb = status["size"] / 1024 / 1024
+    ok = ("✅ Sent “" + str(info.get("title", "song"))[:60]
+          + "” as " + fmt.upper() + " (" + ("%.1f MB" % size_mb) + ")")
+    if message is not None:
+        await message.reply_text(ok, disable_web_page_preview=True)
+
+
+async def _handle_suno_callback(update, user_id, store, callback, data):
+    action = data[4:]
+    if action == "menu":
+        menu = suno_menu()
+        await callback.edit_message_text(menu["text"],
+                                         reply_markup=menu["reply_markup"])
+        return
+    if action == "study":
+        card = suno_study()
+        await callback.edit_message_text(card["text"],
+                                         reply_markup=card["reply_markup"])
+        return
+    if action == "link":
+        store.set_session(user_id, "SONG_LINK", {})
+        card = {"text": "🎵 Send me a *public* Suno link — "
+                        "suno.com/s/… (share) or suno.com/song/… (song). "
+                        "Private songs need a login, so send the shared one. "
+                        "(❌ Cancel to stop.)"}
+        await callback.answer("")
+        await callback.edit_message_text(card["text"])
+        return
+    if action.startswith("dl:"):
+        fmt = action[3:].lower()
+        state, sdata = store.get_session(user_id)
+        info = sdata.get("info") if state == "SONG_LINK" and isinstance(sdata, dict) else None
+        if not isinstance(info, dict):
+            await callback.answer("Load a song first.", show_alert=True)
+            return
+        await callback.answer("⏳ Decrypting + sending " + fmt.upper() + "…")
+        await _suno_download(update, user_id, store, callback, info, fmt)
+        return
+    await callback.answer("Unknown Suno action.", show_alert=True)
 
 
 async def handle_update(update, context, *, search_provider=None, store=None):
@@ -877,6 +989,10 @@ async def handle_update(update, context, *, search_provider=None, store=None):
                     return
                 await callback.edit_message_text(text, reply_markup=kb)
                 return
+        if data.startswith("snu:"):
+            # Suno AI downloader: snu:menu | snu:study | snu:link | snu:dl:<fmt>
+            await _handle_suno_callback(update, user_id, store, callback, data)
+            return
         if data.startswith("auto:"):
             action = data[5:]
             if action == "menu":
@@ -1157,7 +1273,7 @@ async def handle_update(update, context, *, search_provider=None, store=None):
                          "MQL5_LISTING", "EX4_LISTING", "AUTO_LISTING",
                          "FIND_TOPIC",
                          "FIND_RESULT", "FORGE_TOPIC", "RESEARCH_TOPIC",
-                         "ASK_TOPIC"):
+                         "ASK_TOPIC", "SONG_LINK"):
                 store.clear_session(user_id)
             await _run_command(action, user_id, store, message,
                                search_provider)
@@ -1251,6 +1367,29 @@ async def handle_update(update, context, *, search_provider=None, store=None):
             return
         store.clear_session(user_id)
         await _ask(message, user_id, store, text)
+        return
+
+    # Suno: a typed link answers the pending "send me a Suno link" prompt.
+    if state == "SONG_LINK":
+        if text in ("/cancel", "cancel", "Cancel"):
+            store.clear_session(user_id)
+            await message.reply_text("Cancelled.")
+            return
+        if not looks_like_suno_link(text):
+            await message.reply_text(
+                "That's not a Suno link. Send the share link (suno.com/s/…) "
+                "or the song link (suno.com/song/…) — or ❌ Cancel.")
+            return
+        await _suno_load_info(update, store, user_id, None, reply=text)
+        return
+
+    # A pasted Suno link, even outside the prompt, is an obvious intent —
+    # route it straight to the downloader instead of LLM-intent-classifying
+    # the URL as a book topic. Only when not actively waiting for another
+    # input (IDLE/MENU), so we never steal a pending topic prompt.
+    if state in ("IDLE", "MENU", None) and looks_like_suno_link(text):
+        await message.reply_text("🎵 Found a Suno link — reading the song…")
+        await _suno_load_info(update, store, user_id, None, reply=text)
         return
 
     # mid-flow plain text starts a new action
